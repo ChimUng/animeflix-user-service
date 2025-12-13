@@ -1,0 +1,22 @@
+query ($page: Int, $perPage: Int) {
+    Page(page: $page, perPage: $perPage) {
+        media(sort: TRENDING_DESC, type: ANIME, status: RELEASING) {
+            id
+            title {
+                romaji
+                english
+            }
+            coverImage {
+                medium
+                large
+            }
+            episodes
+            nextAiringEpisode {
+                episode
+                airingAt
+            }
+            status
+            format
+        }
+    }
+}

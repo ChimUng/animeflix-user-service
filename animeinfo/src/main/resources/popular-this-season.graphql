@@ -1,0 +1,28 @@
+query($perPage: Int, $page: Int, $season: MediaSeason, $seasonYear: Int) {
+    Page(page: $page, perPage: $perPage) {
+        media (season: $season, seasonYear: $seasonYear, sort: POPULARITY_DESC, type: ANIME) {
+            id
+            title {
+                romaji
+                english
+            }
+            coverImage {
+                large
+            }
+            status
+            episodes
+            description
+            format
+            season
+            seasonYear
+            nextAiringEpisode {
+                episode
+            }
+            startDate {
+                year
+                month
+                day
+            }
+        }
+    }
+}

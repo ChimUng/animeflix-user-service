@@ -1,6 +1,5 @@
 package com.animeflix.userservice.service;
 
-import com.animeflix.userservice.dto.response.WatchHistoryResponse;
 import com.animeflix.userservice.exception.ExternalServiceException;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +28,7 @@ public class ExternalAnimeService {
     /**
      * Lấy thông tin cơ bản của anime (cho history, continue-watching)
      */
-    public Mono<WatchHistoryResponse.AnimeInfo> getAnimeBasicInfo(String animeId) {
+    public Mono<AnimeBasicInfo> getAnimeBasicInfo(String animeId) {
         String cacheKey = CACHE_PREFIX + animeId + ":basic";
 
         return redisTemplate.opsForValue().get(cacheKey)
@@ -45,14 +44,14 @@ public class ExternalAnimeService {
                 });
     }
 
-    private Mono<WatchHistoryResponse.AnimeInfo> fetchAnimeBasicInfo(String animeId) {
+    private Mono<AnimeBasicInfo> fetchAnimeBasicInfo(String animeId) {
         return animeCatalogClient.get()
                 .uri("/{id}", animeId)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .map(response -> {
                     JsonNode data = response.path("data");
-                    return WatchHistoryResponse.AnimeInfo.builder()
+                    return AnimeBasicInfo.builder()
                             .id(data.path("id").asText())
                             .title(data.path("title").path("userPreferred").asText())
                             .coverImage(data.path("coverImage").path("large").asText())
@@ -79,13 +78,13 @@ public class ExternalAnimeService {
                 .bodyToMono(JsonNode.class)
                 .map(response -> {
                     JsonNode data = response.path("data");
-                    return new AnimeDetails(
-                            data.path("title").path("userPreferred").asText(),
-                            data.path("coverImage").path("large").asText(),
-                            data.path("bannerImage").asText(),
-                            data.path("status").asText(),
-                            data.path("episodes").asInt()
-                    );
+                    return AnimeDetails.builder()
+                            .title(data.path("title").path("userPreferred").asText())
+                            .coverImage(data.path("coverImage").path("large").asText())
+                            .bannerImage(data.path("bannerImage").asText())
+                            .status(data.path("status").asText())
+                            .totalEpisodes(data.path("episodes").asInt())
+                            .build();
                 })
                 .timeout(Duration.ofSeconds(5))
                 .onErrorResume(e -> {
@@ -95,22 +94,41 @@ public class ExternalAnimeService {
                 });
     }
 
-    private Mono<WatchHistoryResponse.AnimeInfo> parseBasicInfo(String json) {
+    private Mono<AnimeBasicInfo> parseBasicInfo(String json) {
         // TODO: Parse JSON từ cache
         return Mono.empty();
     }
 
-    private Mono<Void> cacheAnimeInfo(String key, WatchHistoryResponse.AnimeInfo info) {
+    private Mono<Void> cacheAnimeInfo(String key, AnimeBasicInfo info) {
         // TODO: Serialize và cache
         return Mono.empty();
     }
 
+    // DTO cho anime basic info
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class AnimeBasicInfo {
+        private String id;
+        private String title;
+        private String coverImage;
+        private String bannerImage;
+        private Integer totalEpisodes;
+        private String status;
+        private String format;
+    }
+
     // DTO cho anime details
-    public record AnimeDetails(
-            String title,
-            String coverImage,
-            String bannerImage,
-            String status,
-            Integer totalEpisodes
-    ) {}
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class AnimeDetails {
+        private String title;
+        private String coverImage;
+        private String bannerImage;
+        private String status;
+        private Integer totalEpisodes;
+    }
 }

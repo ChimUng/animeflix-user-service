@@ -54,26 +54,22 @@ public class ContinueWatchingService {
     }
 
     private Mono<ContinueWatching> updateExisting(ContinueWatching existing, WatchHistory history) {
-        // Update episode info
         existing.setEpId(history.getEpId());
         existing.setEpNum(history.getEpNum());
-        existing.setEpTitle(history.getEpTitle());           // ✅ Update tên tập
+        existing.setEpTitle(history.getEpTitle());
 
-        // Update next episode
-        existing.setNextepId(history.getNextepId());         // ✅ Update next episode
+        existing.setNextepId(history.getNextepId());
         existing.setNextepNum(history.getNextepNum());
 
-        // Update progress
         existing.setTimeWatched(history.getTimeWatched());
         existing.setDuration(history.getDuration());
         existing.setProgress(history.getProgress());
 
-        // Update provider & settings
         if (history.getProvider() != null) {
-            existing.setProvider(history.getProvider());     // ✅ Update provider
+            existing.setProvider(history.getProvider());
         }
         if (history.getSubtype() != null) {
-            existing.setSubtype(history.getSubtype());       // ✅ Update sub/dub
+            existing.setSubtype(history.getSubtype());
         }
 
         existing.setLastWatchedAt(LocalDateTime.now());
@@ -83,25 +79,25 @@ public class ContinueWatchingService {
     private Mono<ContinueWatching> createNew(WatchHistory history) {
         return Mono.just(ContinueWatching.builder()
                 .userId(history.getUserId())
-                // Anime info (denormalized)
+
                 .aniId(history.getAniId())
                 .aniTitle(history.getAniTitle())
                 .image(history.getImage())
-                // Episode info
+
                 .epId(history.getEpId())
                 .epNum(history.getEpNum())
-                .epTitle(history.getEpTitle())               // ✅ Lưu tên tập
-                // Next episode
-                .nextepId(history.getNextepId())             // ✅ Lưu next episode
+                .epTitle(history.getEpTitle())
+
+                .nextepId(history.getNextepId())
                 .nextepNum(history.getNextepNum())
-                // Progress
+
                 .timeWatched(history.getTimeWatched())
                 .duration(history.getDuration())
                 .progress(history.getProgress())
-                // Provider & settings
-                .provider(history.getProvider())             // ✅ Lưu provider
-                .subtype(history.getSubtype())               // ✅ Lưu sub/dub
-                // Timestamps
+
+                .provider(history.getProvider())
+                .subtype(history.getSubtype())
+
                 .lastWatchedAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build());

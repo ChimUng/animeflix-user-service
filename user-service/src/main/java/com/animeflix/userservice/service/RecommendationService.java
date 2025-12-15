@@ -2,7 +2,9 @@ package com.animeflix.userservice.service;
 
 import com.animeflix.userservice.dto.response.RecommendationResponse;
 import com.animeflix.userservice.repository.WatchHistoryRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -22,6 +24,7 @@ public class RecommendationService {
 
     private final WatchHistoryRepository historyRepo;
     private final ReactiveRedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Qualifier("animeCatalogWebClient")
     private final WebClient animeCatalogClient;
@@ -37,25 +40,28 @@ public class RecommendationService {
 
         // Try cache first
         return redisTemplate.opsForValue().get(cacheKey)
-                .flatMap(cached -> {
-                    log.debug("Cache hit for recommendations: {}", userId);
-                    return Mono.empty(); // Parse JSON if needed
+                .flatMap(cachedJson -> {
+                    log.debug("✅ Cache hit for recommendations: {}", userId);
+                    return parseFromCache(cachedJson);
                 })
-                .switchIfEmpty(Mono.defer(() -> generateRecommendations(userId)))
-                .doOnNext(response -> {
-                    // Cache result (async)
-                    cacheRecommendations(cacheKey, response)
-                            .subscribe(
-                                    v -> log.debug("Cached recommendations for: {}", userId),
-                                    e -> log.warn("Failed to cache recommendations: {}", e.getMessage())
-                            );
-                });
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.debug("❌ Cache miss, generating recommendations for: {}", userId);
+                    return generateRecommendations(userId)
+                            .doOnNext(response -> {
+                                // Cache result (async, không block)
+                                cacheRecommendations(cacheKey, response)
+                                        .subscribe(
+                                                success -> log.debug("✅ Cached recommendations for: {}", userId),
+                                                error -> log.warn("❌ Failed to cache: {}", error.getMessage())
+                                        );
+                            });
+                }));
     }
 
     private Mono<RecommendationResponse> generateRecommendations(String userId) {
         log.info("Generating recommendations for user: {}", userId);
 
-        return historyRepo.findTop20ByUserIdOrderByWatchedAtDesc(userId)
+        return historyRepo.findTop20ByUserIdOrderByCreatedAtDesc(userId)
                 .collectList()
                 .flatMap(history -> {
                     if (history.isEmpty()) {
@@ -178,8 +184,35 @@ public class RecommendationService {
         return "Matches your favorite genres: " + String.join(", ", topGenres);
     }
 
-    private Mono<Void> cacheRecommendations(String key, RecommendationResponse response) {
-        // TODO: Serialize to JSON and cache
-        return Mono.empty();
+    // ========== CACHE HELPERS ==========
+
+    /**
+     * Parse RecommendationResponse từ cached JSON string
+     */
+    private Mono<RecommendationResponse> parseFromCache(String cachedJson) {
+        try {
+            RecommendationResponse response = objectMapper.readValue(
+                    cachedJson,
+                    RecommendationResponse.class
+            );
+            return Mono.just(response);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse cached recommendations: {}", e.getMessage());
+            return Mono.empty(); // Cache invalid → regenerate
+        }
+    }
+
+    /**
+     * Cache RecommendationResponse as JSON string
+     */
+    private Mono<Boolean> cacheRecommendations(String key, RecommendationResponse response) {
+        try {
+            String json = objectMapper.writeValueAsString(response);
+            return redisTemplate.opsForValue()
+                    .set(key, json, CACHE_TTL);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize recommendations for cache: {}", e.getMessage());
+            return Mono.just(false);
+        }
     }
 }

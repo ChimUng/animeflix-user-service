@@ -54,16 +54,13 @@ public class WatchHistoryService {
         existing.setProgress(calculateProgress(request.getTimeWatched(), request.getDuration()));
         existing.setCompleted(request.getCompleted());
 
-        // Update episode info (nếu có thay đổi)
         if (request.getEpTitle() != null) {
             existing.setEpTitle(request.getEpTitle());
         }
 
-        // Update next episode info
         existing.setNextepId(request.getNextepId());
         existing.setNextepNum(request.getNextepNum());
 
-        // Update settings
         if (request.getProvider() != null) {
             existing.setProvider(request.getProvider());
         }
@@ -84,29 +81,29 @@ public class WatchHistoryService {
     private Mono<WatchHistory> createNew(String userId, AddHistoryRequest request) {
         return Mono.just(WatchHistory.builder()
                 .userId(userId)
-                // Anime info
+
                 .aniId(request.getAniId())
                 .aniTitle(request.getAniTitle())
                 .image(request.getImage())
-                // Episode info
+
                 .epId(request.getEpId())
                 .epNum(request.getEpNum())
                 .epTitle(request.getEpTitle())
-                // Progress
+
                 .timeWatched(request.getTimeWatched())
                 .duration(request.getDuration())
                 .progress(calculateProgress(request.getTimeWatched(), request.getDuration()))
                 .completed(request.getCompleted())
-                // Next episode
+
                 .nextepId(request.getNextepId())
                 .nextepNum(request.getNextepNum())
-                // Provider & settings
+
                 .provider(request.getProvider())
                 .subtype(request.getSubtype() != null ? request.getSubtype() : "sub")
-                // Device
+
                 .device(request.getDevice())
                 .quality(request.getQuality())
-                // Timestamps
+
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build());

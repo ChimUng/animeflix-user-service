@@ -15,36 +15,28 @@ import java.time.LocalDateTime;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WatchHistoryResponse {
     private String id;
-
-    // ========== ANIME INFO ==========
     private String aniId;
     private String aniTitle;
     private String image;
 
-    // ========== EPISODE INFO ==========
     private String epId;
     private Integer epNum;
-    private String epTitle;             // ✅ Tên tập
+    private String epTitle;
 
-    // ========== WATCH PROGRESS ==========
-    private Double timeWatched;         // Giây đã xem
-    private Double duration;            // Tổng thời lượng
-    private Double progress;            // 0.0 - 1.0
+    private Double timeWatched;
+    private Double duration;
+    private Double progress;
     private Boolean completed;
 
-    // ========== NEXT EPISODE INFO ==========
-    private String nextepId;            // ✅ ID tập tiếp theo
-    private Integer nextepNum;          // ✅ Số tập tiếp theo
+    private String nextepId;
+    private Integer nextepNum;
 
-    // ========== PROVIDER & SETTINGS ==========
-    private String provider;            // ✅ Provider
-    private String subtype;             // ✅ sub/dub
+    private String provider;
+    private String subtype;
 
-    // ========== DEVICE INFO ==========
     private String device;
     private String quality;
 
-    // ========== TIMESTAMPS ==========
-    private LocalDateTime createdAt;    // Giống schema cũ
+    private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

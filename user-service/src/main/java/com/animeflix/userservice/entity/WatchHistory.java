@@ -23,38 +23,30 @@ public class WatchHistory {
     private String id;
 
     @Indexed
-    private String userId;              // userId từ JWT (thay vì userName)
+    private String userId;
+    private String aniId;
+    private String aniTitle;
+    private String image;
 
-    // ========== ANIME INFO (Denormalized) ==========
-    private String aniId;               // Anime ID (giống schema cũ)
-    private String aniTitle;            // Tên anime
-    private String image;               // Cover image của anime
+    private String epId;
+    private Integer epNum;
+    private String epTitle;
 
-    // ========== EPISODE INFO ==========
-    private String epId;                // Episode ID đầy đủ
-    private Integer epNum;              // Số tập
-    private String epTitle;             // ✅ TÊN TẬP (THIẾU TRƯỚC ĐÂY!)
+    private Double timeWatched;
+    private Double duration;
+    private Double progress;
+    private Boolean completed;
 
-    // ========== WATCH PROGRESS ==========
-    private Double timeWatched;         // Giây đã xem (thay vì watchedSeconds)
-    private Double duration;            // Tổng thời lượng tập (giây)
-    private Double progress;            // 0.0 - 1.0 (calculated: timeWatched/duration)
-    private Boolean completed;          // Xem xong chưa
+    private String nextepId;
+    private Integer nextepNum;
 
-    // ========== NEXT EPISODE INFO (QUAN TRỌNG CHO CONTINUE WATCHING!) ==========
-    private String nextepId;            // ✅ ID tập tiếp theo
-    private Integer nextepNum;          // ✅ Số tập tiếp theo
+    private String provider;
+    private String subtype;
 
-    // ========== PROVIDER & SETTINGS ==========
-    private String provider;            // ✅ "gogoanime", "zoro", "animepahe"
-    private String subtype;             // ✅ "sub" hoặc "dub"
-
-    // ========== DEVICE INFO ==========
     private String device;              // "web", "mobile", "tv"
     private String quality;             // "1080p", "720p", "480p"
 
-    // ========== TIMESTAMPS ==========
     @Indexed
-    private LocalDateTime createdAt;    // Thời điểm xem (giống schema cũ)
-    private LocalDateTime updatedAt;    // Last update
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

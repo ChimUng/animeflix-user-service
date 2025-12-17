@@ -1,6 +1,7 @@
 package com.animeflix.userservice.service;
 
 import com.animeflix.userservice.dto.response.RecommendationResponse;
+import com.animeflix.userservice.entity.WatchHistory;
 import com.animeflix.userservice.repository.WatchHistoryRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -11,6 +12,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -33,186 +35,267 @@ public class RecommendationService {
     private static final Duration CACHE_TTL = Duration.ofHours(6);
 
     /**
-     * Lấy gợi ý anime cho user
+     * ✅ PUBLIC API - Lấy gợi ý anime cho user
      */
     public Mono<RecommendationResponse> getRecommendations(String userId) {
         String cacheKey = CACHE_KEY_PREFIX + userId;
 
-        // Try cache first
         return redisTemplate.opsForValue().get(cacheKey)
-                .flatMap(cachedJson -> {
-                    log.debug("✅ Cache hit for recommendations: {}", userId);
-                    return parseFromCache(cachedJson);
-                })
+                .flatMap(this::parseFromCache)
                 .switchIfEmpty(Mono.defer(() -> {
-                    log.debug("❌ Cache miss, generating recommendations for: {}", userId);
+                    log.info("🔍 Generating recommendations for user: {}", userId);
                     return generateRecommendations(userId)
-                            .doOnNext(response -> {
-                                // Cache result (async, không block)
-                                cacheRecommendations(cacheKey, response)
-                                        .subscribe(
-                                                success -> log.debug("✅ Cached recommendations for: {}", userId),
-                                                error -> log.warn("❌ Failed to cache: {}", error.getMessage())
-                                        );
-                            });
+                            .doOnNext(response -> cacheRecommendations(cacheKey, response)
+                                    .subscribe());
                 }));
     }
 
+    /**
+     * ✅ STEP 1: Generate recommendations
+     */
     private Mono<RecommendationResponse> generateRecommendations(String userId) {
-        log.info("Generating recommendations for user: {}", userId);
-
         return historyRepo.findTop20ByUserIdOrderByCreatedAtDesc(userId)
                 .collectList()
                 .flatMap(history -> {
                     if (history.isEmpty()) {
-                        // Nếu chưa xem gì → Return trending anime
+                        log.info("📺 No watch history - Returning trending anime");
                         return getTrendingAnime();
                     }
 
-                    // Phân tích genres từ history
-                    return analyzeWatchHistory(history)
+                    // Lấy top 5 anime gần nhất
+                    List<String> recentAnimeIds = history.stream()
+                            .limit(5)
+                            .map(WatchHistory::getAniId)
+                            .distinct()
+                            .collect(Collectors.toList());
+
+                    log.debug("🎬 Recent anime IDs: {}", recentAnimeIds);
+
+                    // ✅ FIX: Fetch anime details từ CATALOG SERVICE
+                    return analyzeWatchHistory(recentAnimeIds)
                             .flatMap(this::findSimilarAnime);
                 });
     }
 
-    private Mono<Map<String, Integer>> analyzeWatchHistory(List<?> history) {
-        // TODO: Implement genre analysis từ history
-        // Cần fetch anime details từ catalog-service để lấy genres
+    /**
+     * ✅ STEP 2: Phân tích watch history - FIX CHỖ NÀY
+     * Gọi CATALOG SERVICE để lấy genres của các anime đã xem
+     */
+    private Mono<Map<String, Integer>> analyzeWatchHistory(List<String> animeIds) {
+        log.debug("🔍 Analyzing {} anime from watch history", animeIds.size());
 
-        // Simplified version:
-        Map<String, Integer> genreScores = new HashMap<>();
-        genreScores.put("Action", 10);
-        genreScores.put("Comedy", 5);
+        // Fetch anime details từ catalog service để lấy genres
+        return Flux.fromIterable(animeIds)
+                .flatMap(animeId -> {
+                    log.debug("📡 Fetching anime details: {}", animeId);
 
-        return Mono.just(genreScores);
+                    return animeCatalogClient.get()
+                            .uri("/{id}", animeId)
+                            .retrieve()
+                            .bodyToMono(JsonNode.class)
+                            .map(response -> {
+                                // Parse genres từ response
+                                JsonNode media = response.path("data").path("Media");
+                                JsonNode genresNode = media.path("genres");
+
+                                List<String> genres = new ArrayList<>();
+                                if (genresNode.isArray()) {
+                                    genresNode.forEach(g -> genres.add(g.asText()));
+                                }
+
+                                log.debug("✅ Genres for anime {}: {}", animeId, genres);
+                                return genres;
+                            })
+                            .onErrorResume(e -> {
+                                log.warn("⚠️ Failed to fetch anime {}: {}", animeId, e.getMessage());
+                                return Mono.just(Collections.emptyList());
+                            });
+                }, 3) // Fetch 3 anime đồng thời
+                .flatMap(Flux::fromIterable) // Flatten List<String> to String
+                .collectMultimap(genre -> genre, genre -> 1) // Count genres
+                .map(multimap -> {
+                    // Convert MultiValueMap to Map<String, Integer>
+                    Map<String, Integer> genreScores = multimap.entrySet().stream()
+                            .collect(Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    e -> e.getValue().size()
+                            ));
+
+                    log.info("🎯 Genre analysis: {}", genreScores);
+                    return genreScores;
+                })
+                .defaultIfEmpty(Collections.emptyMap());
     }
 
+    /**
+     * ✅ STEP 3: Tìm anime tương tự dựa trên genres
+     */
     private Mono<RecommendationResponse> findSimilarAnime(Map<String, Integer> genreScores) {
-        // Lấy top 3 genres
+        if (genreScores.isEmpty()) {
+            log.warn("⚠️ No genres found - Fallback to trending");
+            return getTrendingAnime();
+        }
+
+        // Top 3 genres yêu thích
         List<String> topGenres = genreScores.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                 .limit(3)
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
 
-        log.debug("Top genres for recommendations: {}", topGenres);
+        log.info("🎯 Top genres: {}", topGenres);
 
-        // Gọi anime-catalog-service để search anime theo genres
-        return animeCatalogClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/search")
-                        .queryParam("genres", String.join(",", topGenres))
-                        .queryParam("sort", "POPULARITY_DESC")
-                        .queryParam("page", 1)
-                        .queryParam("perPage", 10)
-                        .build())
-                .retrieve()
-                .bodyToMono(JsonNode.class)
+        // ✅ Gọi TRENDING từ catalog service (đã có genres)
+        return getTrendingAnime()
                 .map(response -> {
-                    // Parse response và tạo RecommendationResponse
-                    List<RecommendationResponse.AnimeRecommendation> recommendations = new ArrayList<>();
-
-                    JsonNode data = response.path("data");
-                    if (data.isArray()) {
-                        data.forEach(node -> {
-                            recommendations.add(RecommendationResponse.AnimeRecommendation.builder()
-                                    .id(node.path("id").asText())
-                                    .title(node.path("title").path("userPreferred").asText())
-                                    .coverImage(node.path("coverImage").path("large").asText())
-                                    .score(calculateScore(node, genreScores))
-                                    .matchReason(getMatchReason(topGenres))
-                                    .build());
-                        });
-                    }
+                    // Score lại dựa trên genre matching
+                    List<RecommendationResponse.AnimeRecommendation> scored =
+                            response.getRecommendations().stream()
+                                    .map(anime -> {
+                                        int score = calculateScore(anime.getGenres(), genreScores);
+                                        anime.setScore(score);
+                                        anime.setMatchReason(getMatchReason(topGenres));
+                                        return anime;
+                                    })
+                                    .filter(anime -> anime.getScore() > 0)
+                                    .sorted(Comparator.comparingInt(
+                                                    RecommendationResponse.AnimeRecommendation::getScore)
+                                            .reversed())
+                                    .limit(10)
+                                    .collect(Collectors.toList());
 
                     return RecommendationResponse.builder()
-                            .recommendations(recommendations)
-                            .reason("Based on your watch history")
+                            .recommendations(scored)
+                            .reason("Based on your watch history: " + String.join(", ", topGenres))
                             .build();
-                })
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch recommendations: {}", e.getMessage());
-                    return getTrendingAnime(); // Fallback
                 });
     }
 
+    /**
+     * ✅ STEP 4: Lấy trending anime từ CATALOG SERVICE
+     * Response đã có genres, chỉ cần parse
+     */
     private Mono<RecommendationResponse> getTrendingAnime() {
+        log.debug("📈 Fetching trending anime from catalog service");
+
         return animeCatalogClient.get()
-                .uri("/trending?page=1&perPage=10")
+                .uri("/trending?page=1&perPage=20")
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .map(response -> {
                     List<RecommendationResponse.AnimeRecommendation> recommendations = new ArrayList<>();
 
+                    // Parse response từ catalog service
                     JsonNode data = response.path("data");
-                    if (data.isArray()) {
-                        data.forEach(node -> {
+                    JsonNode pageData = data.path("Page");
+                    JsonNode mediaList = pageData.path("media");
+
+                    if (mediaList.isArray()) {
+                        mediaList.forEach(node -> {
+                            // Parse genres
+                            List<String> genres = new ArrayList<>();
+                            JsonNode genresNode = node.path("genres");
+                            if (genresNode.isArray()) {
+                                genresNode.forEach(g -> genres.add(g.asText()));
+                            }
+
                             recommendations.add(RecommendationResponse.AnimeRecommendation.builder()
                                     .id(node.path("id").asText())
                                     .title(node.path("title").path("userPreferred").asText())
                                     .coverImage(node.path("coverImage").path("large").asText())
-                                    .score(80)
+                                    .bannerImage(node.path("bannerImage").asText(null))
+                                    .genres(genres)
+                                    .averageScore(node.path("averageScore").asInt(0))
+                                    .popularity(node.path("popularity").asInt(0))
+                                    .status(node.path("status").asText())
+                                    .format(node.path("format").asText())
+                                    .score(80) // Default score, sẽ được recalculate
                                     .matchReason("Trending now")
                                     .build());
                         });
                     }
 
+                    log.info("✅ Fetched {} trending anime", recommendations.size());
+
                     return RecommendationResponse.builder()
                             .recommendations(recommendations)
                             .reason("Trending anime - Start watching to get personalized recommendations")
                             .build();
+                })
+                .onErrorResume(e -> {
+                    log.error("❌ Failed to fetch trending anime: {}", e.getMessage());
+                    return Mono.just(RecommendationResponse.builder()
+                            .recommendations(Collections.emptyList())
+                            .reason("Unable to fetch recommendations")
+                            .build());
                 });
     }
 
-    private Integer calculateScore(JsonNode node, Map<String, Integer> genreScores) {
-        // Simple scoring: base popularity + genre match bonus
-        int baseScore = node.path("popularity").asInt(0) / 1000;
-
-        JsonNode genres = node.path("genres");
-        int genreBonus = 0;
-        if (genres.isArray()) {
-            for (JsonNode genre : genres) {
-                genreBonus += genreScores.getOrDefault(genre.asText(), 0);
-            }
+    /**
+     * ✅ HELPER: Calculate score dựa trên genre matching
+     */
+    private Integer calculateScore(List<String> animeGenres, Map<String, Integer> genreScores) {
+        if (animeGenres == null || animeGenres.isEmpty()) {
+            return 0;
         }
 
-        return Math.min(100, baseScore + genreBonus);
+        int score = 0;
+        for (String genre : animeGenres) {
+            score += genreScores.getOrDefault(genre, 0) * 10; // x10 để score rõ ràng hơn
+        }
+
+        return score;
     }
 
+    /**
+     * ✅ HELPER: Generate match reason
+     */
     private String getMatchReason(List<String> topGenres) {
-        if (topGenres.isEmpty()) return "Popular choice";
+        if (topGenres.isEmpty()) {
+            return "Popular choice";
+        }
         return "Matches your favorite genres: " + String.join(", ", topGenres);
     }
 
     // ========== CACHE HELPERS ==========
 
-    /**
-     * Parse RecommendationResponse từ cached JSON string
-     */
     private Mono<RecommendationResponse> parseFromCache(String cachedJson) {
         try {
             RecommendationResponse response = objectMapper.readValue(
-                    cachedJson,
-                    RecommendationResponse.class
-            );
+                    cachedJson, RecommendationResponse.class);
+            log.debug("✅ Cache hit");
             return Mono.just(response);
         } catch (JsonProcessingException e) {
-            log.warn("Failed to parse cached recommendations: {}", e.getMessage());
-            return Mono.empty(); // Cache invalid → regenerate
+            log.warn("⚠️ Failed to parse cache: {}", e.getMessage());
+            return Mono.empty();
+        }
+    }
+
+    private Mono<Boolean> cacheRecommendations(String key, RecommendationResponse response) {
+        try {
+            String json = objectMapper.writeValueAsString(response);
+            return redisTemplate.opsForValue().set(key, json, CACHE_TTL);
+        } catch (JsonProcessingException e) {
+            log.error("❌ Failed to cache: {}", e.getMessage());
+            return Mono.just(false);
         }
     }
 
     /**
-     * Cache RecommendationResponse as JSON string
+     * ✅ PUBLIC API - Clear cache cho user (optional feature)
      */
-    private Mono<Boolean> cacheRecommendations(String key, RecommendationResponse response) {
-        try {
-            String json = objectMapper.writeValueAsString(response);
-            return redisTemplate.opsForValue()
-                    .set(key, json, CACHE_TTL);
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize recommendations for cache: {}", e.getMessage());
-            return Mono.just(false);
-        }
+    public Mono<Void> clearCache(String userId) {
+        String cacheKey = CACHE_KEY_PREFIX + userId;
+        log.info("🗑️ Clearing cache for user: {}", userId);
+
+        return redisTemplate.delete(cacheKey)
+                .doOnSuccess(deleted -> {
+                    if (deleted > 0) {
+                        log.info("✅ Cache cleared for user: {}", userId);
+                    } else {
+                        log.debug("ℹ️ No cache found for user: {}", userId);
+                    }
+                })
+                .then();
     }
 }

@@ -1,0 +1,5 @@
+spring:
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb+srv://duynguyen19087:hongduy1907@cluster0.c7r7olo.mongodb.net/animeflix_auth?retryWrites=true&w=majority}
+  profiles: prod

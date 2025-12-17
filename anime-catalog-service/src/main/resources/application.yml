@@ -1,0 +1,15 @@
+server:
+  port: 8080
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/animeflix_catalog
+      auto-index-creation: true
+    redis:
+      url: ${REDIS_URL:rediss://default:AeIjAAIncDEwNzdmMmM3MzEyMTI0ODE1OTk5ZjNkN2ZmNmRhOTE0OHAxNTc4OTE@known-feline-57891.upstash.io:6379}
+
+app:
+  cache:
+    anime-detail-ttl: 86400
+    list-ttl: 3600

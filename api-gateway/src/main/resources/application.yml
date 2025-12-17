@@ -1,0 +1,29 @@
+server:
+  port: 4004
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service
+          uri: ${service.auth.url:http://localhost:8085}
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=0
+
+        - id: anime-service
+          uri: ${service.anime.url:http://localhost:8080}
+          predicates:
+            - Path=/anime/**
+          filters:
+            - AuthenticationFilter
+            - StripPrefix=1          # /anime/{id} → /{id} → match @GetMapping("/{id}")
+
+service:
+  auth:
+    url: http://localhost:8085
+  anime:
+    url: http://localhost:8080

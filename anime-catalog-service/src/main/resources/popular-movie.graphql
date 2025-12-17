@@ -1,0 +1,35 @@
+query ($page: Int, $perPage: Int) {
+    Page(page: $page, perPage: $perPage) {
+        media(type: ANIME, format: MOVIE, sort: POPULARITY_DESC) {
+            id
+            title {
+                romaji
+                english
+            }
+            coverImage {
+                large
+                extraLarge
+            }
+            description
+            bannerImage
+            popularity
+            episodes
+            duration
+            averageScore
+            nextAiringEpisode {
+                airingAt
+                episode
+                timeUntilAiring
+            }
+            format
+            genres
+            status
+            seasonYear
+            startDate {
+                year
+                month
+                day
+            }
+        }
+    }
+}

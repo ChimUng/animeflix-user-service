@@ -1,0 +1,30 @@
+server:
+  port: 8085
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/animeflix_auth
+    redis:
+      url: ${REDIS_URL:rediss://default:AeIjAAIncDEwNzdmMmM3MzEyMTI0ODE1OTk5ZjNkN2ZmNmRhOTE0OHAxNTc4OTE@known-feline-57891.upstash.io:6379}
+  codec:
+    # Quan trọng: tắt auto content-length
+    http:
+      legacy:
+        response:
+          write-content-length: false
+  profiles:
+    active: local
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+jwt:
+  # Tạo key cực mạnh: openssl rand -base64 64
+  access-secret: ${JWT_ACCESS_SECRET:L4hpYR9+eExfmTmT8BVDsRbdZMzGfp+xF6C+ELw8gTrm+yWlFbx4X19sre1b5c15QUPNobIZS2cQekVEOkdABg==}
+
+  # Key riêng cho refresh token (rất quan trọng!)
+  refresh-secret: ${JWT_REFRESH_SECRET:9A3lxFACwGC6OAzwPvK22lURItmrT5r3Xc8Qk2c6UN0DI0s9FnkB3aF+vqLyXbKCaI0UEspaneEFpQcl9jgeMw==}
+
+  access-exp: 3600000    # 1 giờ
+  refresh-exp: 2592000000 # 30 ngày

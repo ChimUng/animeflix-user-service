@@ -1,0 +1,39 @@
+query($page: Int, $perPage: Int, $from: Int, $to: Int) {
+    Page(page: $page, perPage: $perPage) {
+        pageInfo {
+            hasNextPage
+        }
+        airingSchedules(
+            airingAt_greater: $from
+            airingAt_lesser: $to
+        ) {
+            episode
+            timeUntilAiring
+            airingAt
+            media {
+                id
+                idMal
+                title { romaji english userPreferred native }
+                coverImage { large extraLarge color medium }
+                description
+                bannerImage
+                episodes
+                status
+                duration
+                genres
+                source
+                type
+                seasonYear
+                season
+                format
+                averageScore
+                popularity
+                countryOfOrigin
+                startDate { year month day }
+                endDate { year month day }
+                trailer { id site thumbnail }
+                siteUrl
+            }
+        }
+    }
+}

@@ -1,0 +1,43 @@
+
+query ($page: Int, $perPage: Int) {
+Page(page: $page, perPage: $perPage) {
+media(sort: FAVOURITES_DESC, type: ANIME) {
+id
+title {
+romaji
+english
+}
+coverImage {
+large
+extraLarge
+color
+}
+episodes
+status
+duration
+genres
+description
+bannerImage
+season
+format
+averageScore
+popularity
+nextAiringEpisode {
+airingAt
+episode
+timeUntilAiring
+}
+seasonYear
+startDate {
+year
+month
+day
+}
+endDate {
+year
+month
+day
+}
+}
+}
+}

@@ -55,3 +55,14 @@ logging:
     com.animeflix.userservice: DEBUG
     org.springframework.data.mongodb: INFO
     org.springframework.security: INFO
+
+kafka:
+  bootstrap-servers: localhost:9092
+  consumer:
+    group-id: user-service-notifications
+    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    properties:
+      spring.json.trusted.packages: com.animeflix.userservice.dto.kafka
+  topics:
+    new-episode: anime.episode.new

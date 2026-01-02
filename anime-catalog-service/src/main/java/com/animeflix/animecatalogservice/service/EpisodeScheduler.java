@@ -1,29 +1,33 @@
 package com.animeflix.animecatalogservice.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.animeflix.animecatalogservice.Entity.AnimeSchedule;
+import com.animeflix.animecatalogservice.Repository.ScheduleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class EpisodeScheduler {
 
-    private final AnimeService animeService;
+    private final ScheduleRepository scheduleRepository;
     private final EpisodeEventPublisher eventPublisher;
-    private final RedisTemplate<String, String> redisTemplate;
+    private final ReactiveRedisTemplate<String, String> redisTemplate;
 
     private static final String PUBLISHED_KEY_PREFIX = "published:";
 
     /**
-     * Check new episodes every 5 minutes
+     * Check for new episodes every 5 minutes
+     * 1. Query schedules từ MongoDB
+     * 2. Filter episodes chưa publish
+     * 3. Publish Kafka events
      */
     @Scheduled(cron = "0 */5 * * * ?")
     public void checkNewEpisodes() {
@@ -33,77 +37,76 @@ public class EpisodeScheduler {
         long now = Instant.now().getEpochSecond();
         long next24h = Instant.now().plus(Duration.ofHours(24)).getEpochSecond();
 
-        animeService.getAnimeSchedule(1, 50, now)
-                .subscribe(
-                        scheduleJson -> processSchedule(scheduleJson),
-                        error -> log.error("❌ Error checking episodes: {}", error.getMessage()),
-                        () -> {
-                            long duration = System.currentTimeMillis() - startTime;
-                            log.info("✅ Episode check completed in {}ms", duration);
-                        }
-                );
+        // Query schedules trong 24 giờ tới
+        Flux<AnimeSchedule> schedules = Flux.fromIterable(
+                scheduleRepository.findByAiringAtBetweenOrderByAiringAtAsc(now, next24h)
+        );
+
+        schedules
+                .flatMap(this::processSchedule)
+                .reduce(0, Integer::sum)
+                .doOnSuccess(count -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    log.info("✅ Episode check completed: {} events published in {}ms", count, duration);
+                })
+                .doOnError(error -> log.error("❌ Error checking episodes: {}", error.getMessage()))
+                .subscribe();
     }
 
     /**
-     * Process schedule response and publish events
+     * Process single schedule entry
+     * - Check if already published (Redis cache)
+     * - Publish Kafka event
+     * - Mark as published
      */
-    private void processSchedule(String scheduleJson) {
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper =
-                    new com.fasterxml.jackson.databind.ObjectMapper();
-            JsonNode root = mapper.readTree(scheduleJson);
-            JsonNode animes = root.path("animes");
+    private reactor.core.publisher.Mono<Integer> processSchedule(AnimeSchedule schedule) {
+        String cacheKey = PUBLISHED_KEY_PREFIX + schedule.getAnimeId() + ":" + schedule.getEpisode();
 
-            if (!animes.isArray()) {
-                log.warn("⚠️ Invalid schedule response format");
-                return;
-            }
+        // Check if already published
+        return redisTemplate.hasKey(cacheKey)
+                .flatMap(exists -> {
+                    if (Boolean.TRUE.equals(exists)) {
+                        log.debug("⏭️ Already published: anime={}, episode={}",
+                                schedule.getAnimeId(), schedule.getEpisode());
+                        return reactor.core.publisher.Mono.just(0);
+                    }
 
-            int publishedCount = 0;
+                    //  Publish Kafka event
+                    String animeTitle = extractTitle(schedule);
+                    String coverImage = schedule.getCoverImage();
 
-            for (JsonNode anime : animes) {
-                String animeId = anime.path("id").asText();
-                Integer episodeNum = anime.path("episode").asInt();
+                    eventPublisher.publishNewEpisode(
+                            schedule.getAnimeId(),
+                            animeTitle,
+                            schedule.getEpisode(),
+                            schedule.getAiringAt(),
+                            coverImage,
+                            schedule.getBannerImage()
+                    );
 
-                // Check if already published
-                String cacheKey = PUBLISHED_KEY_PREFIX + animeId + ":" + episodeNum;
-                Boolean exists = redisTemplate.hasKey(cacheKey);
+                    // Mark as published (TTL: 30 days)
+                    return redisTemplate.opsForValue()
+                            .set(cacheKey, "1", Duration.ofDays(30))
+                            .thenReturn(1);
+                });
+    }
 
-                if (Boolean.TRUE.equals(exists)) {
-                    log.debug("⏭️ Already published: anime={}, episode={}", animeId, episodeNum);
-                    continue;
-                }
-
-                // Parse anime details
-                JsonNode title = anime.path("title");
-                String animeTitle = title.path("english").asText();
-                if (animeTitle == null || animeTitle.isEmpty()) {
-                    animeTitle = title.path("romaji").asText();
-                }
-
-                Long airingAt = anime.path("airingAt").asLong();
-                String coverImage = anime.path("coverImage").asText();
-                String bannerImage = anime.path("bannerImage").asText();
-
-                // Publish event
-                eventPublisher.publishNewEpisode(
-                        animeId,
-                        animeTitle,
-                        episodeNum,
-                        airingAt,
-                        coverImage,
-                        bannerImage
-                );
-
-                // Mark as published (TTL: 30 days)
-                redisTemplate.opsForValue().set(cacheKey, "1", 30, TimeUnit.DAYS);
-                publishedCount++;
-            }
-
-            log.info("📤 Published {} new episode events", publishedCount);
-
-        } catch (Exception e) {
-            log.error("❌ Error processing schedule: {}", e.getMessage(), e);
+    /**
+     *  Extract anime title safely
+     */
+    private String extractTitle(AnimeSchedule schedule) {
+        if (schedule.getTitle() == null) {
+            return "Unknown Anime";
         }
+
+        String title = schedule.getTitle().getEnglish();
+        if (title == null || title.isEmpty()) {
+            title = schedule.getTitle().getRomaji();
+        }
+        if (title == null || title.isEmpty()) {
+            title = schedule.getTitle().getUserPreferred();
+        }
+
+        return title != null ? title : "Unknown Anime";
     }
 }

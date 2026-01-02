@@ -1,0 +1,92 @@
+services:
+  # ============================================
+  # KAFKA + ZOOKEEPER
+  # ============================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: animeflix-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: animeflix-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  # ============================================
+  # MONGODB
+  # ============================================
+
+  mongo:
+    image: mongo:7.0
+    container_name: animeflix-mongo-auth
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-auth-data:/data/db
+    command: --quiet
+
+  # ============================================
+  # SERVICES (Không cần build, chỉ chạy local)
+  # ============================================
+#  auth-service:
+#    build: auth-service
+#    container_name: animeflix-auth-dev
+#    restart: unless-stopped
+#    ports:
+#      - "8085:8085"
+#    environment:
+#      - spring.data.mongodb.uri=mongodb://mongo:27017/animeflix_auth
+#      - SPRING_PROFILES_ACTIVE=local
+#    depends_on:
+#      - mongo
+#
+#  anime-catalog-service:
+#    build: ./anime-catalog-service
+#    container_name: animeflix-catalog
+#    restart: unless-stopped
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/animeflix_catalog
+#      - SPRING_PROFILES_ACTIVE=local
+#    depends_on:
+#      - mongo
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: animeflix-kafka-ui
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: animeflix
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    depends_on:
+      - kafka
+
+volumes:
+  mongo-auth-data:
+  kafka-data:
+  zookeeper-data:

@@ -11,7 +11,19 @@ spring:
       auto-index-creation: true
 
     redis:
-       url: ${REDIS_URL:rediss://default:AeIjAAIncDEwNzdmMmM3MzEyMTI0ODE1OTk5ZjNkN2ZmNmRhOTE0OHAxNTc4OTE@known-feline-57891.upstash.io:6379}
+       url: ${REDIS_URL:rediss://default:AU3bAAIncDEzODRhYTg2MjIwZTU0NTA1YTYzNzNhYjlmMzFkOTQ0OXAxMTk5MzE@square-sheep-19931.upstash.io:6379}
+
+  # ✅ Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: user-service-notifications
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.animeflix.userservice.dto.kafka,com.animeflix.animecatalogservice.DTO.kafka
+    topics:
+      new-episode: anime.episode.new
 
   codec:
     http:
@@ -55,14 +67,4 @@ logging:
     com.animeflix.userservice: DEBUG
     org.springframework.data.mongodb: INFO
     org.springframework.security: INFO
-
-kafka:
-  bootstrap-servers: localhost:9092
-  consumer:
-    group-id: user-service-notifications
-    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-    properties:
-      spring.json.trusted.packages: com.animeflix.userservice.dto.kafka
-  topics:
-    new-episode: anime.episode.new
+    org.springframework.kafka: INFO

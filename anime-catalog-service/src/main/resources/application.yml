@@ -7,8 +7,15 @@ spring:
       uri: mongodb://localhost:27017/animeflix_catalog
       auto-index-creation: true
     redis:
-      url: ${REDIS_URL:rediss://default:AeIjAAIncDEwNzdmMmM3MzEyMTI0ODE1OTk5ZjNkN2ZmNmRhOTE0OHAxNTc4OTE@known-feline-57891.upstash.io:6379}
+      url: ${REDIS_URL:rediss://default:AU3bAAIncDEzODRhYTg2MjIwZTU0NTA1YTYzNzNhYjlmMzFkOTQ0OXAxMTk5MzE@square-sheep-19931.upstash.io:6379}
 
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.type.mapping: NewEpisodeEvent:com.animeflix.animecatalogservice.DTO.kafka.NewEpisodeEvent
 app:
   cache:
     anime-detail-ttl: 86400

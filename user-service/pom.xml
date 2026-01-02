@@ -63,6 +63,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+            <!-- ✅ EXCLUDE servlet security -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-webmvc</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- JWT -->
@@ -124,17 +131,17 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
-        <!-- WebSocket -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-websocket</artifactId>
-        </dependency>
-
-        <!-- Spring Messaging (for STOMP) -->
+        <!-- REACTIVE WebSocket (không dùng servlet websocket) -->
         <dependency>
             <groupId>org.springframework</groupId>
-            <artifactId>spring-messaging</artifactId>
+            <artifactId>spring-websocket</artifactId>
         </dependency>
+
+<!--        &lt;!&ndash; Spring Messaging (for STOMP) &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework</groupId>-->
+<!--            <artifactId>spring-messaging</artifactId>-->
+<!--        </dependency>-->
 
         <!-- Reactor Kafka (for reactive consumer) -->
         <dependency>
@@ -142,19 +149,19 @@
             <artifactId>reactor-kafka</artifactId>
         </dependency>
 
-        <!-- SockJS (optional - for browser fallback) -->
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>sockjs-client</artifactId>
-            <version>1.5.1</version>
-        </dependency>
+<!--        &lt;!&ndash; SockJS (optional - for browser fallback) &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.webjars</groupId>-->
+<!--            <artifactId>sockjs-client</artifactId>-->
+<!--            <version>1.5.1</version>-->
+<!--        </dependency>-->
 
-        <!-- STOMP WebSocket (optional) -->
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>stomp-websocket</artifactId>
-            <version>2.3.4</version>
-        </dependency>
+<!--        &lt;!&ndash; STOMP WebSocket (optional) &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.webjars</groupId>-->
+<!--            <artifactId>stomp-websocket</artifactId>-->
+<!--            <version>2.3.4</version>-->
+<!--        </dependency>-->
     </dependencies>
 
     <build>

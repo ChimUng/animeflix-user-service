@@ -2,44 +2,34 @@ package com.animeflix.userservice.service;
 
 import com.animeflix.userservice.dto.websocket.WebSocketNotificationMessage;
 import com.animeflix.userservice.entity.Notification;
+import com.animeflix.userservice.handler.NotificationWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 
+/**
+ * ✅ WebSocket Notification Service (Updated for Reactive WebSocket)
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class WebSocketNotificationService {
 
-    private final SimpMessagingTemplate messagingTemplate;
-    private final ReactiveRedisTemplate<String, String> redisTemplate;
-
-    private static final String ONLINE_USERS_KEY = "online:users";
+    private final NotificationWebSocketHandler webSocketHandler;
 
     /**
      * Send notification to specific user via WebSocket
      * Only sends if user is online
      */
     public void sendToUser(String userId, Notification notification) {
-        // Check if user online
-        isUserOnline(userId)
+        webSocketHandler.isUserOnline(userId)
                 .subscribe(online -> {
                     if (Boolean.TRUE.equals(online)) {
                         WebSocketNotificationMessage message = buildMessage(notification);
-
-                        // Send to user-specific queue
-                        messagingTemplate.convertAndSendToUser(
-                                userId,
-                                "/queue/notifications",
-                                message
-                        );
-
-                        log.info("📲 Notification sent to user {} via WebSocket", userId);
+                        webSocketHandler.sendToUser(userId, message);
                     } else {
                         log.debug("⏭️ User {} offline, notification stored only", userId);
                     }
@@ -50,48 +40,14 @@ public class WebSocketNotificationService {
      * Broadcast notification to all online users
      */
     public void broadcast(WebSocketNotificationMessage message) {
-        messagingTemplate.convertAndSend("/topic/notifications", message);
-        log.info("📢 Notification broadcast to all users");
-    }
-
-    /**
-     * Mark user as online (called when user connects)
-     */
-    public void markUserOnline(String userId) {
-        redisTemplate.opsForSet()
-                .add(ONLINE_USERS_KEY, userId)
-                .subscribe(added -> {
-                    if (Boolean.TRUE.equals(added)) {
-                        log.info("👤 User {} marked as online", userId);
-                    }
-                });
-    }
-
-    /**
-     * Mark user as offline (called when user disconnects)
-     */
-    public void markUserOffline(String userId) {
-        redisTemplate.opsForSet()
-                .remove(ONLINE_USERS_KEY, userId)
-                .subscribe(removed -> {
-                    if (removed > 0) {
-                        log.info("👤 User {} marked as offline", userId);
-                    }
-                });
-    }
-
-    /**
-     * Check if user is online
-     */
-    private reactor.core.publisher.Mono<Boolean> isUserOnline(String userId) {
-        return redisTemplate.opsForSet().isMember(ONLINE_USERS_KEY, userId);
+        webSocketHandler.broadcast(message);
     }
 
     /**
      * Get count of online users
      */
-    public reactor.core.publisher.Mono<Long> getOnlineUsersCount() {
-        return redisTemplate.opsForSet().size(ONLINE_USERS_KEY);
+    public Mono<Long> getOnlineUsersCount() {
+        return webSocketHandler.getOnlineUsersCount();
     }
 
     /**

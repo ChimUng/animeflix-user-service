@@ -91,24 +91,27 @@ public class EpisodeService {
 
         return malSyncClient.fetchMalSync(animeId)
                 .flatMap(entries -> {
-                    List<Mono<Provider>> tasks = new ArrayList<>();
-
                     if (entries.length == 0) {
                         log.info("⚠️ No MalSync data, using Consumet + Anify");
-                        tasks.add(consumetClient.fetchConsumet(animeId));
 
-                        return anifyClient.fetchAnify(animeId)
-                                .flatMap(anifyProviders -> {
-                                    tasks.addAll(anifyProviders.stream()
-                                            .map(Mono::just)
-                                            .toList());
-                                    return Flux.merge(tasks).collectList();
+                        // ✅ Parallel fetch: Consumet + Anify
+                        Mono<Provider> consumetMono = consumetClient.fetchConsumet(animeId);
+                        Mono<List<Provider>> anifyMono = anifyClient.fetchAnify(animeId);
+
+                        return Mono.zip(consumetMono, anifyMono)
+                                .map(tuple -> {
+                                    List<Provider> result = new ArrayList<>();
+                                    result.add(tuple.getT1());
+                                    result.addAll(tuple.getT2());
+                                    return result;
                                 });
                     }
 
                     log.debug("✅ MalSync returned {} entries", entries.length);
 
-                    // Fetch từng provider
+                    // Build list of Monos
+                    List<Mono<Provider>> tasks = new ArrayList<>();
+
                     for (MalSyncEntry entry : entries) {
                         String providerId = entry.getProviderId();
                         String subUrl = entry.getSub();
@@ -123,7 +126,7 @@ public class EpisodeService {
                             String gogoId = subUrl != null ? extractIdFromUrl("gogoanime", subUrl) : null;
                             if (gogoId != null) {
                                 log.debug("📌 Adding Gogoanime provider: {}", gogoId);
-                                tasks.add(gogoanimeClient.fetchGogoanime(gogoId, null));
+                                tasks.add(gogoanimeClient.fetchGogoanime(gogoId));
                             }
                         }
                     }
@@ -134,7 +137,16 @@ public class EpisodeService {
                         tasks.add(animePaheClient.fetchAnimePahe(animeId, title, year, type));
                     }
 
-                    return Flux.merge(tasks).collectList();
+                    // ✅ FIX: Convert List<Mono<Provider>> to Mono<List<Provider>>
+                    if (tasks.isEmpty()) {
+                        return Mono.just(Collections.<Provider>emptyList());
+                    }
+
+                    return Mono.zip(tasks, objects ->
+                            Arrays.stream(objects)
+                                    .map(obj -> (Provider) obj)
+                                    .collect(Collectors.toList())
+                    );
                 })
                 .flatMap(providers -> {
                     List<Provider> validProviders = providers.stream()
@@ -146,7 +158,7 @@ public class EpisodeService {
 
                     if (validProviders.isEmpty()) {
                         log.warn("⚠️ No episodes found for anime ID: {}", animeId);
-                        return Mono.just(Collections.emptyList());
+                        return Mono.just(Collections.<Provider>emptyList());
                     }
 
                     return aniZipClient.fetchEpisodeMeta(animeId)
@@ -161,10 +173,12 @@ public class EpisodeService {
                             })
                             .defaultIfEmpty(validProviders);
                 })
-                .doOnSuccess(providers ->
+                .doOnSuccess(providers -> {
+                    if (providers != null) {
                         log.info("✅ Successfully fetched {} providers for anime ID: {}",
-                                providers.size(), animeId)
-                );
+                                providers.size(), animeId);
+                    }
+                });
     }
 
     // ========================================

@@ -36,9 +36,9 @@ public class EpisodeService {
      */
     public Mono<List<Provider>> fetchEpisodes(
             String animeId,
-            String title,
-            Integer year,
-            String type,
+            String title,      // ← Giữ lại nhưng KHÔNG dùng cho AnimePahe
+            Integer year,      // ← Giữ lại nhưng KHÔNG dùng cho AnimePahe
+            String type,       // ← Giữ lại nhưng KHÔNG dùng cho AnimePahe
             boolean releasing,
             boolean refresh
     ) {
@@ -82,9 +82,9 @@ public class EpisodeService {
      */
     private Mono<List<Provider>> fetchAndCacheData(
             String animeId,
-            String title,
-            Integer year,
-            String type,
+            String title,      // ← KHÔNG SỬ DỤNG NỮA cho AnimePahe
+            Integer year,      // ← KHÔNG SỬ DỤNG NỮA cho AnimePahe
+            String type,       // ← KHÔNG SỬ DỤNG NỮA cho AnimePahe
             long cacheTimeSeconds
     ) {
         log.debug("🔍 Starting provider fetch for anime ID: {}", animeId);
@@ -92,24 +92,26 @@ public class EpisodeService {
         return malSyncClient.fetchMalSync(animeId)
                 .flatMap(entries -> {
                     if (entries.length == 0) {
-                        log.info("⚠️ No MalSync data, using Consumet + Anify");
+                        log.info("⚠️ No MalSync data, using Consumet + Anify + AnimePahe");
 
-                        // ✅ Parallel fetch: Consumet + Anify
+                        // Parallel fetch: Consumet + Anify + AnimePahe
                         Mono<Provider> consumetMono = consumetClient.fetchConsumet(animeId);
                         Mono<List<Provider>> anifyMono = anifyClient.fetchAnify(animeId);
+                        Mono<Provider> animePaheMono = animePaheClient.fetchAnimePahe(animeId);  // ✅
 
-                        return Mono.zip(consumetMono, anifyMono)
+                        return Mono.zip(consumetMono, anifyMono, animePaheMono)
                                 .map(tuple -> {
                                     List<Provider> result = new ArrayList<>();
-                                    result.add(tuple.getT1());
-                                    result.addAll(tuple.getT2());
+                                    result.add(tuple.getT1());     // Consumet
+                                    result.addAll(tuple.getT2());  // Anify
+                                    result.add(tuple.getT3());     // AnimePahe ✅
                                     return result;
                                 });
                     }
 
                     log.debug("✅ MalSync returned {} entries", entries.length);
 
-                    // Build list of Monos
+                    // Build tasks list
                     List<Mono<Provider>> tasks = new ArrayList<>();
 
                     for (MalSyncEntry entry : entries) {
@@ -119,25 +121,20 @@ public class EpisodeService {
                         if ("zoro".equals(providerId) && subUrl != null) {
                             String zoroId = extractIdFromUrl("zoro", subUrl);
                             if (zoroId != null) {
-                                log.debug("📌 Adding Zoro provider: {}", zoroId);
                                 tasks.add(zoroClient.fetchZoro(zoroId));
                             }
                         } else if ("gogoanime".equals(providerId)) {
                             String gogoId = subUrl != null ? extractIdFromUrl("gogoanime", subUrl) : null;
                             if (gogoId != null) {
-                                log.debug("📌 Adding Gogoanime provider: {}", gogoId);
                                 tasks.add(gogoanimeClient.fetchGogoanime(gogoId));
                             }
                         }
                     }
 
-                    // ✅ ALWAYS add AnimePahe
-                    if (title != null && !title.isEmpty()) {
-                        log.debug("📌 Adding AnimePahe provider");
-                        tasks.add(animePaheClient.fetchAnimePahe(animeId, title, year, type));
-                    }
+                    // ✅ LUÔN LUÔN thêm AnimePahe
+                    log.debug("📌 Adding AnimePahe provider");
+                    tasks.add(animePaheClient.fetchAnimePahe(animeId));  // ← TỰ ĐỘNG fetch AniList
 
-                    // ✅ FIX: Convert List<Mono<Provider>> to Mono<List<Provider>>
                     if (tasks.isEmpty()) {
                         return Mono.just(Collections.<Provider>emptyList());
                     }
@@ -149,6 +146,7 @@ public class EpisodeService {
                     );
                 })
                 .flatMap(providers -> {
+                    // Filter valid providers
                     List<Provider> validProviders = providers.stream()
                             .filter(Objects::nonNull)
                             .filter(this::hasEpisodes)
@@ -161,11 +159,13 @@ public class EpisodeService {
                         return Mono.just(Collections.<Provider>emptyList());
                     }
 
+                    // Fetch and merge metadata
                     return aniZipClient.fetchEpisodeMeta(animeId)
                             .flatMap(metaList -> {
                                 log.debug("✅ Fetched {} metadata entries", metaList.size());
                                 combineEpisodeMeta(validProviders, metaList);
 
+                                // Cache both
                                 return Mono.zip(
                                         redisRepository.setCachedData("episode:" + animeId, validProviders, cacheTimeSeconds),
                                         redisRepository.setCachedData("meta:" + animeId, metaList, cacheTimeSeconds)

@@ -22,21 +22,15 @@ public class EpisodeController {
     private final EpisodeService episodeService;
 
     /**
-     * ✅ GET /api/episode/{id}?title=...&year=...&type=...&releasing=...&refresh=...
-     *
-     * Response: List<Provider> (KHÔNG có wrapper để khớp Next.js)
+     * ✅ GET /api/episode/{id}?releasing=...&refresh=...
      */
     @GetMapping("/{animeId}")
     public Mono<ResponseEntity<List<Provider>>> getEpisodes(
             @PathVariable String animeId,
-            @RequestParam(required = false) String title,
-            @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "false") boolean releasing,
             @RequestParam(defaultValue = "false") boolean refresh
     ) {
-        log.info("📥 GET /api/episode/{} - title={}, year={}, type={}, releasing={}, refresh={}",
-                animeId, title, year, type, releasing, refresh);
+        log.info("📥 GET /api/episode/{} - releasing={}, refresh={}", animeId, releasing, refresh);
 
         // Validation
         try {
@@ -50,7 +44,7 @@ public class EpisodeController {
             return Mono.just(ResponseEntity.badRequest().build());
         }
 
-        return episodeService.fetchEpisodes(animeId, title, year, type, releasing, refresh)
+        return episodeService.fetchEpisodes(animeId, releasing, refresh)
                 .doOnSuccess(providers -> log.info("✅ Returned {} providers for anime {}",
                         providers.size(), animeId))
                 .map(ResponseEntity::ok)
@@ -65,13 +59,8 @@ public class EpisodeController {
      * ✅ POST /api/episode/{id}/refresh - Force refresh
      */
     @PostMapping("/{animeId}/refresh")
-    public Mono<ResponseEntity<List<Provider>>> refreshEpisodes(
-            @PathVariable String animeId,
-            @RequestParam(required = false) String title,
-            @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) String type
-    ) {
+    public Mono<ResponseEntity<List<Provider>>> refreshEpisodes(@PathVariable String animeId) {
         log.info("🔄 POST /api/episode/{}/refresh", animeId);
-        return getEpisodes(animeId, title, year, type, false, true);
+        return getEpisodes(animeId, false, true);
     }
 }

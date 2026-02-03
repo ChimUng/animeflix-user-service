@@ -3,15 +3,18 @@ package com.animeflix.animeepisode.service;
 import com.animeflix.animeepisode.model.Episode;
 import com.animeflix.animeepisode.model.Provider;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @Component
+@Slf4j
 public class GogoanimeClient {
 
     private final WebClient gogoWebClient;  // From config, base anitaku.to or zoro
@@ -22,8 +25,10 @@ public class GogoanimeClient {
 
     public Mono<Provider> fetchGogoanime(String id) {
         String uri = "/anime/gogoanime/info/" + id;  // Theo docs Consumet
+        log.debug("🔍 Fetching Gogoanime: {}", uri);
         return gogoWebClient.get().uri(uri).retrieve()
                 .bodyToMono(JsonNode.class)
+                .timeout(Duration.ofSeconds(10))
                 .map(response -> {
                     List<Episode> subEpisodes = parseEpisodes(response.path("episodes"));  // Assume field "episodes" là array sub
                     List<Episode> dubEpisodes = new ArrayList<>();  // Nếu có field "dubEpisodes", parse tương tự; hiện assume no dub or fetch separate

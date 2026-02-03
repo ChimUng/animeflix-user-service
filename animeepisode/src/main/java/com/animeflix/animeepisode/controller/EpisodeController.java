@@ -22,7 +22,7 @@ public class EpisodeController {
     private final EpisodeService episodeService;
 
     /**
-     * ✅ GET /api/episode/{id}?releasing=...&refresh=...
+     * GET /api/episode/{id}?releasing=...&refresh=...
      */
     @GetMapping("/{animeId}")
     public Mono<ResponseEntity<List<Provider>>> getEpisodes(
@@ -56,7 +56,7 @@ public class EpisodeController {
     }
 
     /**
-     * ✅ POST /api/episode/{id}/refresh - Force refresh
+     *  POST /api/episode/{id}/refresh - Force refresh
      */
     @PostMapping("/{animeId}/refresh")
     public Mono<ResponseEntity<List<Provider>>> refreshEpisodes(@PathVariable String animeId) {

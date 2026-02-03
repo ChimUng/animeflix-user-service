@@ -12,9 +12,13 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 9anime Client - Fetch từ Zenime API
+ *
+ * ✅ Output structure: Map<String, List<Episode>> {"sub": [...]}
+ * -> Consistent với Zoro, Gogoanime providers
  */
 @Component
 @Slf4j
@@ -31,8 +35,25 @@ public class NineAnimeClient {
     /**
      * Fetch 9anime episodes từ Zenime API
      *
+     * Zenime response structure:
+     * {
+     *   "success": true,
+     *   "results": {
+     *     "totalEpisodes": 1085,
+     *     "episodes": [
+     *       {
+     *         "episode_no": 1,
+     *         "id": "one-piece-100?ep=2142",
+     *         "title": "I'm Luffy!...",
+     *         "japanese_title": "...",
+     *         "filler": false
+     *       }
+     *     ]
+     *   }
+     * }
+     *
      * @param zoroId Zoro ID (e.g., "one-piece-100")
-     * @return Provider với episodes
+     * @return Provider với episodes wrapped trong {"sub": [...]}
      */
     public Mono<Provider> fetch9anime(String zoroId) {
         if (zoroId == null || zoroId.isEmpty()) {
@@ -68,7 +89,9 @@ public class NineAnimeClient {
                     episodesNode.forEach(epNode -> {
                         Episode ep = new Episode();
                         ep.setNumber(epNode.path("episode_no").asInt());
-                        ep.setId(epNode.path("id").asText());
+
+                        // ✅ "id" từ Zenime giống format episodeId của Zoro (e.g. "one-piece-100?ep=2142")
+                        ep.setEpisodeId(epNode.path("id").asText());
 
                         // Title: ưu tiên title > japanese_title
                         String title = epNode.path("title").asText();
@@ -84,7 +107,8 @@ public class NineAnimeClient {
 
                     log.info("✅ 9anime: Found {} episodes for {}", episodes.size(), zoroId);
 
-                    return new Provider("9anime", "9anime", episodes);
+                    // ✅ FIX: Wrap trong Map {"sub": episodes} để consistent với Zoro/Gogoanime
+                    return new Provider("9anime", "9anime", false, Map.of("sub", episodes));
                 })
                 .onErrorResume(e -> {
                     log.error("❌ Error fetching 9anime for {}: {}", zoroId, e.getMessage());
@@ -93,6 +117,7 @@ public class NineAnimeClient {
     }
 
     private Provider emptyProvider() {
-        return new Provider("9anime", "9anime", new ArrayList<>());
+        // ✅ Empty provider cũng phải consistent structure
+        return new Provider("9anime", "9anime", false, Map.of("sub", new ArrayList<>()));
     }
 }

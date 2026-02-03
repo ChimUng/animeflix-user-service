@@ -35,14 +35,16 @@ public class ExternalApiConfig {
 
     private ExchangeStrategies exchangeStrategies() {
         return ExchangeStrategies.builder()
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024)) // 16MB
                 .build();
     }
 
-
     @Bean
     public WebClient consumetWebClient() {
-        return WebClient.builder().baseUrl(consumetUri).build();
+        return WebClient.builder()
+                .baseUrl(consumetUri)
+                .exchangeStrategies(exchangeStrategies())
+                .build();
     }
 
     @Bean
@@ -52,14 +54,19 @@ public class ExternalApiConfig {
 
     @Bean
     public WebClient zoroWebClient() {
-        return WebClient.builder().baseUrl(zoroUri).build();
+        return WebClient.builder()
+                .baseUrl(zoroUri)
+                .exchangeStrategies(exchangeStrategies())
+                .build();
     }
 
     @Bean
     public WebClient gogoWebClient() {
-        return WebClient.builder().baseUrl(gogoUri).build();
+        return WebClient.builder()
+                .baseUrl(gogoUri)
+                .exchangeStrategies(exchangeStrategies())
+                .build();
     }
-
 
     @Bean
     public WebClient anifyWebClient() {
@@ -68,12 +75,22 @@ public class ExternalApiConfig {
 
     @Bean
     public WebClient animepaheWebClient() {
-        return WebClient.builder().baseUrl(animepaheUrl.replace("{anime_session}/{session}", "")).build();  // Adjust dynamic
+        return WebClient.builder().baseUrl(animepaheUrl.replace("{anime_session}/{session}", "")).build();
     }
 
     @Bean
     public WebClient animappingWebClient() {
-        return WebClient.builder().baseUrl(animappingUrl.split("\\?")[0]).exchangeStrategies(exchangeStrategies()).build();  // Base without query
+        String baseUrl = animappingUrl;
+        if (baseUrl.contains("?")) {
+            baseUrl = baseUrl.split("\\?")[0];
+        }
+        if (baseUrl.contains("/mappings")) {
+            baseUrl = baseUrl.substring(0, baseUrl.indexOf("/mappings"));
+        }
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .exchangeStrategies(exchangeStrategies())
+                .build();
     }
 
     @Bean

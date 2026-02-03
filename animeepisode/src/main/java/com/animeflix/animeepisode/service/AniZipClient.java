@@ -33,9 +33,20 @@ public class AniZipClient {
 
     /**
      * Gọi API AniZip, trả về toàn bộ JSON response
+     *
+     * ✅ FIX: Base URL từ config đã được clean thành "https://api.ani.zip"
+     * Nên URI ở đây phải là "/mappings?anilist_id={id}"
+     *
+     * Trước (sai): base = "https://api.ani.zip", uri = "/?anilist_id=21"
+     *   -> call "https://api.ani.zip/?anilist_id=21" (sai endpoint)
+     *
+     * Sau (đúng): base = "https://api.ani.zip", uri = "/mappings?anilist_id=21"
+     *   -> call "https://api.ani.zip/mappings?anilist_id=21" ✅
      */
     private Mono<JsonNode> getAniZipResponse(String anilistId) {
-        String uri = "/?anilist_id=" + anilistId;
+        String uri = "/mappings?anilist_id=" + anilistId;
+        log.debug("🔍 AniZip fetching: {}", uri);
+
         return animappingWebClient.get()
                 .uri(uri)
                 .retrieve()
@@ -49,13 +60,41 @@ public class AniZipClient {
 
     /**
      * Trích danh sách các Episode từ JSON response
+     *
+     * ✅ AniZip response structure:
+     * {
+     *   "mappings": { ... },
+     *   "data": {
+     *     "episodes": {
+     *       "1": { "episode": "1", "title": {...}, "summary": "...", "image": "..." },
+     *       "2": { ... },
+     *       ...
+     *     }
+     *   }
+     * }
+     *
+     * Trước: lấy root.path("episodes") -> sai vì episodes nằm trong "data"
+     * Sau:   lấy root.path("data").path("episodes") ✅
      */
     private List<EpisodeMeta> extractEpisodesFromResponse(JsonNode root) {
-        if (root == null || !root.has("episodes")) {
+        if (root == null) {
+            log.warn("⚠️ AniZip: root is null");
             return List.of();
         }
 
-        JsonNode episodesNode = root.path("episodes");
+        // ✅ FIX: episodes nằm trong "data" -> "episodes", không phải directly ở root
+        JsonNode episodesNode = root.path("data").path("episodes");
+
+        if (episodesNode.isMissingNode() || episodesNode.isNull()) {
+            // Thử fallback root.path("episodes") nếu API thay đổi structure
+            episodesNode = root.path("episodes");
+        }
+
+        if (episodesNode.isMissingNode() || episodesNode.isNull() || !episodesNode.isObject()) {
+            log.warn("⚠️ AniZip: No episodes found in response. Keys: {}", root.fieldNames());
+            return List.of();
+        }
+
         List<EpisodeMeta> episodes = new ArrayList<>();
 
         Iterator<Map.Entry<String, JsonNode>> fields = episodesNode.fields();
@@ -67,10 +106,13 @@ public class AniZipClient {
             episodes.add(episodeMeta);
         }
 
-        // Có thể sort theo số tập nếu cần
+        log.info("✅ AniZip: Extracted {} episode metadata entries", episodes.size());
+
+        // Sort theo số tập
         episodes.sort(Comparator.comparing(EpisodeMeta::getEpisode));
         return episodes;
     }
+
     /**
      * Chuyển 1 episode JSON nhỏ thành EpisodeMeta object
      */

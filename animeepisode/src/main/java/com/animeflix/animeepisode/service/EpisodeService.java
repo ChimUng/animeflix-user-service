@@ -26,7 +26,7 @@ public class EpisodeService {
     private final ConsumetClient consumetClient;
     private final AnifyClient anifyClient;
     private final AnimePaheClient animePaheClient;
-    private final NineAnimeClient nineAnimeClient;  // ← THÊM MỚI
+    private final NineAnimeClient nineAnimeClient;
     private final AniZipClient aniZipClient;
     private final RedisEpisodeRepository redisRepository;
     private final ObjectMapper objectMapper;

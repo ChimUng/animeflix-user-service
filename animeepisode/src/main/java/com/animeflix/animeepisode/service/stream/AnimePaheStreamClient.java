@@ -13,13 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * AnimePahe stream client.
- * Flow giống Next.js animePaheEpisode():
- *   GET ${CONSUMET_URI}/anime/animepahe/watch?episodeId=${episodeid}
- *   -> sources trả về từ API
- *   -> thêm headers: { Referer: 'https://kwik.cx/', Origin: 'https://animepahe.si' }
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j

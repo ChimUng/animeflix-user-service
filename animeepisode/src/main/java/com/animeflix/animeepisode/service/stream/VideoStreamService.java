@@ -9,12 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-/**
- * 🎬 VideoStreamService - UPDATED với methods riêng cho từng provider
- *
- * ✅ NEW: Provider-specific methods
- * ❌ DEPRECATE: Generic fetchStream() method
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -32,10 +26,6 @@ public class VideoStreamService {
     private final RedisEpisodeRepository redisRepository;
     private final ObjectMapper objectMapper;
 
-    // ========================================
-    // 🆕 NEW METHODS - Provider-specific
-    // ========================================
-
     /**
      * Fetch Consumet stream (Gogoanime/Gogobackup)
      */
@@ -45,58 +35,40 @@ public class VideoStreamService {
         String cacheKey = buildCacheKey("consumet", episodeId);
 
         if (refresh) {
-            return redisRepository.deleteKey(cacheKey)
-                    .then(fetchAndCacheConsumet(episodeId, cacheKey));
+            return redisRepository.deleteKey(cacheKey).then(fetchAndCacheConsumet(episodeId, cacheKey));
         }
 
-        return getCachedVideoData(cacheKey)
-                .switchIfEmpty(fetchAndCacheConsumet(episodeId, cacheKey));
+        return getCachedVideoData(cacheKey).switchIfEmpty(fetchAndCacheConsumet(episodeId, cacheKey));
     }
 
     /**
      * Fetch Zoro stream
      */
-    public Mono<VideoData> fetchZoroStream(
-            String anilistId,
-            String episodeId,
-            String subtype,
-            boolean refresh
-    ) {
-        log.info("🔍 [Service] Zoro stream: anilistId={}, episodeId={}, subtype={}, refresh={}",
-                anilistId, episodeId, subtype, refresh);
+    public Mono<VideoData> fetchZoroStream(String anilistId, String episodeId, String subtype, boolean refresh) {
+        log.info("🔍 [Service] Zoro stream: anilistId={}, episodeId={}, subtype={}, refresh={}", anilistId, episodeId, subtype, refresh);
 
         String cacheKey = buildCacheKey("zoro", anilistId, episodeId, subtype);
 
         if (refresh) {
-            return redisRepository.deleteKey(cacheKey)
-                    .then(fetchAndCacheZoro(anilistId, episodeId, subtype, cacheKey));
+            return redisRepository.deleteKey(cacheKey).then(fetchAndCacheZoro(anilistId, episodeId, subtype, cacheKey));
         }
 
-        return getCachedVideoData(cacheKey)
-                .switchIfEmpty(fetchAndCacheZoro(anilistId, episodeId, subtype, cacheKey));
+        return getCachedVideoData(cacheKey).switchIfEmpty(fetchAndCacheZoro(anilistId, episodeId, subtype, cacheKey));
     }
 
     /**
      * Fetch 9anime stream
      */
-    public Mono<VideoData> fetch9AnimeStream(
-            String anilistId,
-            String episodeId,
-            String subtype,
-            boolean refresh
-    ) {
-        log.info("🔍 [Service] 9anime stream: anilistId={}, episodeId={}, subtype={}, refresh={}",
-                anilistId, episodeId, subtype, refresh);
+    public Mono<VideoData> fetch9AnimeStream(String anilistId, String episodeId, String subtype, boolean refresh) {
+        log.info("🔍 [Service] 9anime stream: anilistId={}, episodeId={}, subtype={}, refresh={}", anilistId, episodeId, subtype, refresh);
 
         String cacheKey = buildCacheKey("9anime", anilistId, episodeId, subtype);
 
         if (refresh) {
-            return redisRepository.deleteKey(cacheKey)
-                    .then(fetchAndCache9Anime(anilistId, episodeId, subtype, cacheKey));
+            return redisRepository.deleteKey(cacheKey).then(fetchAndCache9Anime(anilistId, episodeId, subtype, cacheKey));
         }
 
-        return getCachedVideoData(cacheKey)
-                .switchIfEmpty(fetchAndCache9Anime(anilistId, episodeId, subtype, cacheKey));
+        return getCachedVideoData(cacheKey).switchIfEmpty(fetchAndCache9Anime(anilistId, episodeId, subtype, cacheKey));
     }
 
     /**
@@ -119,26 +91,16 @@ public class VideoStreamService {
     /**
      * Fetch Anify stream (generic fallback)
      */
-    public Mono<VideoData> fetchAnifyStream(
-            String provider,
-            String episodeId,
-            String episodeNum,
-            String anilistId,
-            String subtype,
-            boolean refresh
-    ) {
-        log.info("🔍 [Service] Anify stream: provider={}, episodeId={}, refresh={}",
-                provider, episodeId, refresh);
+    public Mono<VideoData> fetchAnifyStream(String provider, String episodeId, String episodeNum, String anilistId, String subtype, boolean refresh) {
+        log.info("🔍 [Service] Anify stream: provider={}, episodeId={}, refresh={}", provider, episodeId, refresh);
 
         String cacheKey = buildCacheKey("anify", provider, anilistId, episodeId, subtype);
 
         if (refresh) {
-            return redisRepository.deleteKey(cacheKey)
-                    .then(fetchAndCacheAnify(provider, episodeId, episodeNum, anilistId, subtype, cacheKey));
+            return redisRepository.deleteKey(cacheKey).then(fetchAndCacheAnify(provider, episodeId, episodeNum, anilistId, subtype, cacheKey));
         }
 
-        return getCachedVideoData(cacheKey)
-                .switchIfEmpty(fetchAndCacheAnify(provider, episodeId, episodeNum, anilistId, subtype, cacheKey));
+        return getCachedVideoData(cacheKey).switchIfEmpty(fetchAndCacheAnify(provider, episodeId, episodeNum, anilistId, subtype, cacheKey));
     }
 
     // ========================================
@@ -150,22 +112,12 @@ public class VideoStreamService {
                 .flatMap(videoData -> cacheIfValid(videoData, cacheKey));
     }
 
-    private Mono<VideoData> fetchAndCacheZoro(
-            String anilistId,
-            String episodeId,
-            String subtype,
-            String cacheKey
-    ) {
+    private Mono<VideoData> fetchAndCacheZoro(String anilistId, String episodeId, String subtype, String cacheKey) {
         return zoroClient.fetchZoroStream(episodeId, anilistId, subtype)
                 .flatMap(videoData -> cacheIfValid(videoData, cacheKey));
     }
 
-    private Mono<VideoData> fetchAndCache9Anime(
-            String anilistId,
-            String episodeId,
-            String subtype,
-            String cacheKey
-    ) {
+    private Mono<VideoData> fetchAndCache9Anime(String anilistId, String episodeId, String subtype, String cacheKey) {
         return nineAnimeClient.fetch9AnimeStream(episodeId, anilistId, subtype)
                 .flatMap(videoData -> cacheIfValid(videoData, cacheKey));
     }
@@ -175,14 +127,7 @@ public class VideoStreamService {
                 .flatMap(videoData -> cacheIfValid(videoData, cacheKey));
     }
 
-    private Mono<VideoData> fetchAndCacheAnify(
-            String provider,
-            String episodeId,
-            String episodeNum,
-            String anilistId,
-            String subtype,
-            String cacheKey
-    ) {
+    private Mono<VideoData> fetchAndCacheAnify(String provider, String episodeId, String episodeNum, String anilistId, String subtype, String cacheKey) {
         return anifyClient.fetchAnifyStream(provider, episodeId, episodeNum, anilistId, subtype)
                 .flatMap(videoData -> cacheIfValid(videoData, cacheKey));
     }

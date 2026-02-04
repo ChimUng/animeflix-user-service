@@ -15,17 +15,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * ✅ UPDATED NineAnimeStreamClient - Sử dụng WebClient từ Config & SlugBuilder
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class NineAnimeStreamClient {
 
-    // ✅ Inject đúng Bean "nineAnimeWebClient" đã cấu hình trong ExternalApiConfig
-    @Qualifier("nineAnimeWebClient")
-    private final WebClient webClient;
+    private final WebClient nineAnimeWebClient;
 
     private final SlugBuilder slugBuilder;
 
@@ -43,8 +38,7 @@ public class NineAnimeStreamClient {
     }
 
     private Mono<VideoData> fetchStream(String animeEpisodeId, String subtype) {
-        // ✅ Đã đổi từ "zenimeWebClient" thành "webClient" để khớp với biến khai báo
-        return webClient.get()
+        return nineAnimeWebClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/stream")
                         .queryParam("id", animeEpisodeId)

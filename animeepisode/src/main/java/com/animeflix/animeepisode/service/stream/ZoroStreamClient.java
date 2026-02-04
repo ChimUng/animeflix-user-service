@@ -14,16 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * ✅ UPDATED ZoroStreamClient - Sử dụng SlugBuilder
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ZoroStreamClient {
 
     private final WebClient zoroWebClient;
-    private final SlugBuilder slugBuilder; // ✅ Inject SlugBuilder
+    private final SlugBuilder slugBuilder;
 
     /**
      * Entry point — matches Next.js zoroEpisode()
@@ -33,7 +30,6 @@ public class ZoroStreamClient {
      * @param subtype    "sub" | "dub"
      */
     public Mono<VideoData> fetchZoroStream(String episodeid, String animeId, String subtype) {
-        // ✅ Sử dụng SlugBuilder thay vì duplicate code
         return slugBuilder.buildZoroEpisodeId(animeId, episodeid)
                 .flatMap(animeEpisodeId -> {
                     log.info("🎯 Zoro final animeEpisodeId: {}", animeEpisodeId);
@@ -41,12 +37,7 @@ public class ZoroStreamClient {
                 });
     }
 
-    // ========================================
-    // Step 1: GET /episode/servers → pick server[1]
-    // Step 2: GET /episode/sources → VideoData
-    // ========================================
     private Mono<VideoData> fetchServersAndStream(String animeEpisodeId, String subtype) {
-        // Step 1: fetch server list
         return zoroWebClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/episode/servers")
@@ -68,7 +59,6 @@ public class ZoroStreamClient {
                         return Mono.empty();
                     }
 
-                    // ✅ Pick index 1 (giống Next.js: serverList[1])
                     JsonNode firstServer = serverList.size() > 1
                             ? serverList.get(1)
                             : serverList.get(0); // fallback index 0 nếu chỉ có 1
@@ -76,7 +66,6 @@ public class ZoroStreamClient {
                     String serverName = firstServer.path("serverName").asText();
                     log.info("🎬 Zoro using server: {}", serverName);
 
-                    // Step 2: fetch stream sources
                     return zoroWebClient.get()
                             .uri(uriBuilder -> uriBuilder
                                     .path("/episode/sources")

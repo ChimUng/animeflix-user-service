@@ -14,17 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Anify stream client.
- * GET https://api.anify.tv/sources
- *   ?providerId=${provider}
- *   &watchId=${episodeid}
- *   &episodeNumber=${epnum}
- *   &id=${animeId}
- *   &subType=${subtype}
- *
- * Matches Next.js AnifyEpisode().
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -71,14 +60,6 @@ public class AnifyStreamClient {
                 });
     }
 
-    // ========================================
-    // Anify response structure:
-    // {
-    //   "sources": [{ "url", "quality", "isM3U8" }],
-    //   "subtitles": [{ "url", "language" }],   ← NOTE: Anify dùng "language" (không phải "lang")
-    //   "headers": { "Referer": "..." }
-    // }
-    // ========================================
     private VideoData parseVideoData(JsonNode response) {
         VideoData videoData = new VideoData();
 

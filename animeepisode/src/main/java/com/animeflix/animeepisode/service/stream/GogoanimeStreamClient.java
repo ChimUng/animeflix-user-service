@@ -16,19 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 🎬 GogoanimeStreamClient - MISSING CLIENT
- *
- * Fetch streams from Gogoanime via Consumet API
- *
- * API: GET ${CONSUMET_URI}/meta/anilist/watch/${episodeId}
- *
- * Used when:
- * - source === "consumet"
- * - provider === "gogoanime" | "gogobackup"
- *
- * NOTE: Giống ConsumetStreamClient nhưng có thể có custom logic
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -67,19 +54,6 @@ public class GogoanimeStreamClient {
                 });
     }
 
-    /**
-     * Parse Consumet response → VideoData
-     *
-     * Consumet Gogoanime response structure:
-     * {
-     *   "sources": [{ "url", "quality", "isM3U8" }],
-     *   "subtitles": [{ "url", "lang" }],
-     *   "headers": { "Referer": "..." },
-     *   "download": "...",
-     *   "intro": { "start", "end" },
-     *   "outro": { "start", "end" }
-     * }
-     */
     private VideoData parseVideoData(JsonNode response) {
         VideoData videoData = new VideoData();
 

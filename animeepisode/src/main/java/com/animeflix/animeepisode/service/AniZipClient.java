@@ -150,4 +150,61 @@ public class AniZipClient {
 
         return meta;
     }
+
+    /**
+     * 🆕 NEW METHOD - Lấy MAL ID từ AniList ID
+     *
+     * Used by: SlugBuilder (fallback khi MalSync fail)
+     *
+     * Flow:
+     * 1. Call AniZip API: GET https://api.ani.zip/mappings?anilist_id={id}
+     * 2. Parse response: { "mappings": { "mal_id": 12345, ... } }
+     * 3. Return mal_id as String
+     *
+     * @param anilistId AniList ID
+     * @return MAL ID (as String) hoặc null nếu không tìm thấy
+     */
+    public Mono<String> fetchMalIdFromAnilist(String anilistId) {
+        log.debug("🔍 AniZip: Fetching MAL ID for AniList ID: {}", anilistId);
+
+        String uri = "/mappings?anilist_id=" + anilistId;
+
+        return animappingWebClient.get()
+                .uri(uri)
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .map(response -> {
+                    JsonNode mappingsNode = response.path("mappings");
+
+                    if (mappingsNode.isMissingNode() || mappingsNode.isNull()) {
+                        log.warn("⚠️ AniZip: No mappings for AniList ID: {}", anilistId);
+                        return null;
+                    }
+
+                    JsonNode malIdNode = mappingsNode.path("mal_id");
+
+                    if (malIdNode.isMissingNode() || malIdNode.isNull()) {
+                        log.warn("⚠️ AniZip: No MAL ID in mappings for AniList ID: {}", anilistId);
+                        return null;
+                    }
+
+                    // MAL ID có thể là number hoặc string
+                    String malId = malIdNode.isNumber()
+                            ? String.valueOf(malIdNode.asLong())
+                            : malIdNode.asText();
+
+                    if (malId.isEmpty()) {
+                        log.warn("⚠️ AniZip: Empty MAL ID for AniList ID: {}", anilistId);
+                        return null;
+                    }
+
+                    log.info("✅ AniZip: Found MAL ID: {} for AniList ID: {}", malId, anilistId);
+                    return malId;
+                })
+                .onErrorResume(e -> {
+                    log.error("❌ AniZip: Error fetching MAL ID for AniList ID {}: {}",
+                            anilistId, e.getMessage());
+                    return Mono.just((String) null);
+                });
+    }
 }

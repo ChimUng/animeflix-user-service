@@ -14,13 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Consumet stream client.
- * GET ${CONSUMET_URI}/meta/anilist/watch/${episodeid}
- * -> trả về sources, subtitles, headers.
- *
- * Matches Next.js consumetEpisode() — response trả về trực tiếp từ Consumet.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -49,14 +42,6 @@ public class ConsumetStreamClient {
                 });
     }
 
-    // ========================================
-    // Consumet /watch response structure:
-    // {
-    //   "sources": [{ "url", "quality", "isM3U8" }],
-    //   "subtitles": [{ "url", "lang" }],    ← NOTE: Consumet dùng "subtitles" + "lang"
-    //   "headers": { "Referer": "..." }
-    // }
-    // ========================================
     private VideoData parseVideoData(JsonNode response) {
         VideoData videoData = new VideoData();
 

@@ -1,10 +1,18 @@
 package com.animeflix.animeepisode.config;
 
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
+
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 @Configuration
 public class ExternalApiConfig {
@@ -42,23 +50,49 @@ public class ExternalApiConfig {
                 .build();
     }
 
+    private HttpClient createHttpClient() {
+        return HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
+                .responseTimeout(Duration.ofSeconds(30))
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new ReadTimeoutHandler(30, TimeUnit.SECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(10, TimeUnit.SECONDS))
+                );
+    }
+
+    private HttpClient createMalSyncHttpClient() {
+        return HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .responseTimeout(Duration.ofSeconds(15))
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new ReadTimeoutHandler(15, TimeUnit.SECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(5, TimeUnit.SECONDS))
+                );
+    }
+
     @Bean
     public WebClient consumetWebClient() {
         return WebClient.builder()
                 .baseUrl(consumetUri)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
                 .exchangeStrategies(exchangeStrategies())
                 .build();
     }
 
     @Bean
     public WebClient malsyncWebClient() {
-        return WebClient.builder().baseUrl(malsyncUri).exchangeStrategies(exchangeStrategies()).build();
+        return WebClient.builder()
+                .baseUrl(malsyncUri)
+                .clientConnector(new ReactorClientHttpConnector(createMalSyncHttpClient()))
+                .exchangeStrategies(exchangeStrategies())
+                .build();
     }
 
     @Bean
     public WebClient zoroWebClient() {
         return WebClient.builder()
                 .baseUrl(zoroUri)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
                 .exchangeStrategies(exchangeStrategies())
                 .build();
     }
@@ -67,18 +101,27 @@ public class ExternalApiConfig {
     public WebClient gogoWebClient() {
         return WebClient.builder()
                 .baseUrl(gogoUri)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
                 .exchangeStrategies(exchangeStrategies())
                 .build();
     }
 
     @Bean
     public WebClient anifyWebClient() {
-        return WebClient.builder().baseUrl(anifyUrl).exchangeStrategies(exchangeStrategies()).build();
+        return WebClient.builder()
+                .baseUrl(anifyUrl)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
+                .exchangeStrategies(exchangeStrategies())
+                .build();
     }
 
     @Bean
     public WebClient animepaheWebClient() {
-        return WebClient.builder().baseUrl(animepaheUrl.replace("{anime_session}/{session}", "")).build();
+        String cleanUrl = animepaheUrl.replace("{anime_session}/{session}", "");
+        return WebClient.builder()
+                .baseUrl(cleanUrl)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
+                .build();
     }
 
     @Bean
@@ -92,6 +135,7 @@ public class ExternalApiConfig {
         }
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
                 .exchangeStrategies(exchangeStrategies())
                 .build();
     }
@@ -100,12 +144,17 @@ public class ExternalApiConfig {
     public WebClient nineAnimeWebClient() {
         return WebClient.builder()
                 .baseUrl(zenimeUrl)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
                 .exchangeStrategies(exchangeStrategies())
                 .build();
     }
 
+
     @Bean
     public WebClient anifyScheduleWebClient() {
-        return WebClient.builder().baseUrl(anifyScheduleUrl).build();
+        return WebClient.builder()
+                .baseUrl(anifyScheduleUrl)
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient()))
+                .build();
     }
 }

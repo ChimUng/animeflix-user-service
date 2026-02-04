@@ -38,6 +38,8 @@ public class ZoroStreamClient {
     }
 
     private Mono<VideoData> fetchServersAndStream(String animeEpisodeId, String subtype) {
+        log.info("🔍 Zoro: Fetching servers for episodeId: {}, subtype: {}", animeEpisodeId, subtype);
+
         return zoroWebClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/episode/servers")
@@ -46,10 +48,18 @@ public class ZoroStreamClient {
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .timeout(Duration.ofSeconds(10))
+                .doOnNext(resp -> log.debug("🔍 Zoro servers response: {}", resp))
                 .flatMap(serverResponse -> {
+                    // ✅ FIX: Check status code first
+                    int status = serverResponse.path("status").asInt(0);
+                    if (status != 200) {
+                        log.error("❌ Zoro: Server API returned status: {}", status);
+                        return Mono.empty();
+                    }
+
                     JsonNode serverData = serverResponse.path("data");
-                    if (serverData.isMissingNode()) {
-                        log.error("❌ Zoro: No serverData");
+                    if (serverData.isMissingNode() || serverData.isNull()) {
+                        log.error("❌ Zoro: No serverData in response");
                         return Mono.empty();
                     }
 
@@ -59,13 +69,20 @@ public class ZoroStreamClient {
                         return Mono.empty();
                     }
 
+                    // ✅ FIX: Prefer hd-2 server (index 1), fallback to first available
                     JsonNode firstServer = serverList.size() > 1
                             ? serverList.get(1)
-                            : serverList.get(0); // fallback index 0 nếu chỉ có 1
+                            : serverList.get(0);
 
-                    String serverName = firstServer.path("serverName").asText();
+                    String serverName = firstServer.path("serverName").asText("");
+                    if (serverName.isEmpty()) {
+                        log.error("❌ Zoro: Empty serverName");
+                        return Mono.empty();
+                    }
+
                     log.info("🎬 Zoro using server: {}", serverName);
 
+                    // ✅ FIX: Fetch sources
                     return zoroWebClient.get()
                             .uri(uriBuilder -> uriBuilder
                                     .path("/episode/sources")
@@ -75,19 +92,35 @@ public class ZoroStreamClient {
                                     .build())
                             .retrieve()
                             .bodyToMono(JsonNode.class)
-                            .timeout(Duration.ofSeconds(15));
+                            .timeout(Duration.ofSeconds(15))
+                            .doOnNext(resp -> log.debug("🔍 Zoro sources response: {}", resp));
                 })
                 .map(sourceResponse -> {
+                    // ✅ FIX: Check status
+                    int status = sourceResponse.path("status").asInt(0);
+                    if (status != 200) {
+                        log.error("❌ Zoro: Sources API returned status: {}", status);
+                        return null;
+                    }
+
                     JsonNode videoData = sourceResponse.path("data");
-                    if (videoData.isMissingNode()) {
+                    if (videoData.isMissingNode() || videoData.isNull()) {
                         log.error("❌ Zoro: No videoData in source response");
                         return null;
                     }
-                    log.info("✅ Zoro: Got videoData");
+
+                    // ✅ Validate sources exist
+                    JsonNode sources = videoData.path("sources");
+                    if (!sources.isArray() || sources.isEmpty()) {
+                        log.error("❌ Zoro: No sources in videoData");
+                        return null;
+                    }
+
+                    log.info("✅ Zoro: Got videoData with {} sources", sources.size());
                     return parseVideoData(videoData);
                 })
                 .onErrorResume(e -> {
-                    log.error("❌ Zoro stream error: {}", e.getMessage());
+                    log.error("❌ Zoro stream error: {}", e.getMessage(), e);
                     return Mono.empty();
                 });
     }
@@ -113,8 +146,8 @@ public class ZoroStreamClient {
         List<VideoTrack> tracks = new ArrayList<>();
         node.path("tracks").forEach(t -> {
             VideoTrack track = new VideoTrack();
-            track.setUrl(t.path("file").asText(""));
-            track.setLang(t.path("label").asText(""));
+            track.setUrl(t.path("url").asText(""));
+            track.setLang(t.path("lang").asText(""));
             track.setKind(t.path("kind").asText(""));
             track.setIsDefault(t.path("default").asBoolean(false));
             tracks.add(track);

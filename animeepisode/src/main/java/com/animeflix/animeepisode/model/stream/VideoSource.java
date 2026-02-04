@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class VideoSource {
     private String url;
-    private String quality;
     private Boolean isM3U8;
     private String type; // "hls", etc.
 }

@@ -21,18 +21,31 @@ import java.util.Map;
 public class NineAnimeStreamClient {
 
     private final WebClient nineAnimeWebClient;
-
     private final SlugBuilder slugBuilder;
 
     /**
-     * @param episodeid  episodeId từ provider
+     * ✅ FIXED - Giống Next.js nineAnimeEpisode()
+     *
+     * @param episodeid  episodeId từ provider:
+     *                   - "2142" (số thuần) → cần build slug
+     *                   - "one-piece-100?ep=2142" (đã built) → dùng luôn
      * @param animeId    anilist ID (dùng để build slug nếu cần)
      * @param subtype    "sub" | "dub"
      */
     public Mono<VideoData> fetch9AnimeStream(String episodeid, String animeId, String subtype) {
+        // ✅ KIỂM TRA: Nếu episodeid đã chứa "?ep=" thì đã được build rồi
+        if (episodeid.contains("?ep=")) {
+            log.info("✅ [9anime] episodeid đã ở dạng đầy đủ: {}", episodeid);
+            return fetchStream(episodeid, subtype);
+        }
+
+        // ✅ Nếu episodeid chỉ là số episode thuần túy, build animeEpisodeId
+        log.info("🔨 [9anime] Building animeEpisodeId từ: anilistId={}, episodeId={}", animeId, episodeid);
         return slugBuilder.buildZoroEpisodeId(animeId, episodeid)
-                .flatMap(paramValue -> {
-                    log.info("🎯 [9anime] final animeEpisodeId: {}", paramValue);
+                .flatMap(animeEpisodeId -> {
+                    // Fallback: nếu vẫn null thì dùng episodeid gốc
+                    String paramValue = animeEpisodeId != null ? animeEpisodeId : episodeid;
+                    log.info("🎯 [9anime] Final animeEpisodeId: {}", paramValue);
                     return fetchStream(paramValue, subtype);
                 });
     }
@@ -83,7 +96,6 @@ public class NineAnimeStreamClient {
         String linkType = link.path("type").asText("");
         videoData.setSources(List.of(new VideoSource(
                 fileUrl,
-                null,
                 "hls".equals(linkType),
                 linkType
         )));

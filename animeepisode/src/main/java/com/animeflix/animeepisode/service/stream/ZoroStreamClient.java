@@ -23,17 +23,29 @@ public class ZoroStreamClient {
     private final SlugBuilder slugBuilder;
 
     /**
-     * Entry point — matches Next.js zoroEpisode()
+     * ✅ FIXED - Entry point giống Next.js zoroEpisode()
      *
-     * @param episodeid  episodeId từ provider (có thể là số thuần hoặc đã có "?ep=")
-     * @param animeId    anilist ID của anime (dùng để build slug)
+     * @param episodeid  episodeId từ provider:
+     *                   - "2142" (số thuần) → cần build slug
+     *                   - "one-piece-100?ep=2142" (đã built) → dùng luôn
+     * @param animeId    anilist ID của anime (dùng để build slug nếu cần)
      * @param subtype    "sub" | "dub"
      */
     public Mono<VideoData> fetchZoroStream(String episodeid, String animeId, String subtype) {
+        // ✅ KIỂM TRA: Nếu episodeid đã chứa "?ep=" thì đã được build rồi
+        if (episodeid.contains("?ep=")) {
+            log.info("✅ Zoro: episodeid đã ở dạng đầy đủ: {}", episodeid);
+            return fetchServersAndStream(episodeid, subtype);
+        }
+
+        // ✅ Nếu episodeid chỉ là số episode thuần túy, build animeEpisodeId
+        log.info("🔨 Zoro: Building animeEpisodeId từ: anilistId={}, episodeId={}", animeId, episodeid);
         return slugBuilder.buildZoroEpisodeId(animeId, episodeid)
                 .flatMap(animeEpisodeId -> {
-                    log.info("🎯 Zoro final animeEpisodeId: {}", animeEpisodeId);
-                    return fetchServersAndStream(animeEpisodeId, subtype);
+                    // Fallback: nếu vẫn null thì dùng episodeid gốc
+                    String paramValue = animeEpisodeId != null ? animeEpisodeId : episodeid;
+                    log.info("🎯 Zoro final animeEpisodeId: {}", paramValue);
+                    return fetchServersAndStream(paramValue, subtype);
                 });
     }
 
@@ -50,7 +62,7 @@ public class ZoroStreamClient {
                 .timeout(Duration.ofSeconds(10))
                 .doOnNext(resp -> log.debug("🔍 Zoro servers response: {}", resp))
                 .flatMap(serverResponse -> {
-                    // ✅ FIX: Check status code first
+                    // ✅ Check status code first
                     int status = serverResponse.path("status").asInt(0);
                     if (status != 200) {
                         log.error("❌ Zoro: Server API returned status: {}", status);
@@ -69,7 +81,7 @@ public class ZoroStreamClient {
                         return Mono.empty();
                     }
 
-                    // ✅ FIX: Prefer hd-2 server (index 1), fallback to first available
+                    // ✅ Prefer hd-2 server (index 1), fallback to first available
                     JsonNode firstServer = serverList.size() > 1
                             ? serverList.get(1)
                             : serverList.get(0);
@@ -82,7 +94,7 @@ public class ZoroStreamClient {
 
                     log.info("🎬 Zoro using server: {}", serverName);
 
-                    // ✅ FIX: Fetch sources
+                    // ✅ Fetch sources
                     return zoroWebClient.get()
                             .uri(uriBuilder -> uriBuilder
                                     .path("/episode/sources")
@@ -96,7 +108,7 @@ public class ZoroStreamClient {
                             .doOnNext(resp -> log.debug("🔍 Zoro sources response: {}", resp));
                 })
                 .map(sourceResponse -> {
-                    // ✅ FIX: Check status
+                    // ✅ Check status
                     int status = sourceResponse.path("status").asInt(0);
                     if (status != 200) {
                         log.error("❌ Zoro: Sources API returned status: {}", status);
@@ -136,8 +148,8 @@ public class ZoroStreamClient {
         node.path("sources").forEach(s -> {
             VideoSource source = new VideoSource();
             source.setUrl(s.path("url").asText());
-            source.setQuality(s.path("quality").asText());
             source.setIsM3U8(s.path("isM3U8").asBoolean(false));
+            source.setType(source.getIsM3U8() ? "hls" : "mp4");
             sources.add(source);
         });
         videoData.setSources(sources);

@@ -68,7 +68,6 @@ public class AnifyStreamClient {
         response.path("sources").forEach(s -> {
             sources.add(new VideoSource(
                     s.path("url").asText(""),
-                    s.path("quality").asText(null),
                     s.path("isM3U8").asBoolean(false),
                     null
             ));

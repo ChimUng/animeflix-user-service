@@ -21,6 +21,9 @@ public class ExternalApiConfig {
     @Value("${gogo.uri}")
     private String gogoUri;
 
+    @Value("${zenime.url:https://zenime-api.vercel.app}")
+    private String zenimeUrl;
+
     @Value("${anify.url}")
     private String anifyUrl;
 
@@ -89,6 +92,14 @@ public class ExternalApiConfig {
         }
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .exchangeStrategies(exchangeStrategies())
+                .build();
+    }
+
+    @Bean
+    public WebClient nineAnimeWebClient() {
+        return WebClient.builder()
+                .baseUrl(zenimeUrl)
                 .exchangeStrategies(exchangeStrategies())
                 .build();
     }

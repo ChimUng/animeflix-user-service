@@ -26,10 +26,9 @@ public class NineAnimeClient {
 
     private final WebClient webClient;
 
-    public NineAnimeClient(@Value("${zenime.url:https://zenime-api.vercel.app}") String zenimeUrl) {
-        this.webClient = WebClient.builder()
-                .baseUrl(zenimeUrl)
-                .build();
+    // Inject trực tiếp Bean nineAnimeWebClient từ config
+    public NineAnimeClient(WebClient nineAnimeWebClient) {
+        this.webClient = nineAnimeWebClient;
     }
 
     /**
@@ -68,7 +67,6 @@ public class NineAnimeClient {
                 .uri(uri)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .timeout(Duration.ofSeconds(10))
                 .map(response -> {
                     // Check success
                     if (!response.path("success").asBoolean(false)) {

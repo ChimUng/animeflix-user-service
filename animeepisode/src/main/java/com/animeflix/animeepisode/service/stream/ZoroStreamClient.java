@@ -1,6 +1,6 @@
 package com.animeflix.animeepisode.service.stream;
 
-import com.animeflix.animeepisode.service.*;
+import com.animeflix.animeepisode.util.SlugBuilder;
 import com.animeflix.animeepisode.model.stream.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
@@ -14,14 +14,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * ✅ UPDATED ZoroStreamClient - Sử dụng SlugBuilder
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ZoroStreamClient {
 
     private final WebClient zoroWebClient;
-    private final MalSyncClient malSyncClient;
-    private final AniZipClient aniZipClient;
+    private final SlugBuilder slugBuilder; // ✅ Inject SlugBuilder
 
     /**
      * Entry point — matches Next.js zoroEpisode()
@@ -31,53 +33,12 @@ public class ZoroStreamClient {
      * @param subtype    "sub" | "dub"
      */
     public Mono<VideoData> fetchZoroStream(String episodeid, String animeId, String subtype) {
-        return buildAnimeEpisodeId(animeId, episodeid)
-                .flatMap(paramValue -> {
-                    log.info("🎯 Zoro final animeEpisodeId: {}", paramValue);
-                    return fetchServersAndStream(paramValue, subtype);
+        // ✅ Sử dụng SlugBuilder thay vì duplicate code
+        return slugBuilder.buildZoroEpisodeId(animeId, episodeid)
+                .flatMap(animeEpisodeId -> {
+                    log.info("🎯 Zoro final animeEpisodeId: {}", animeEpisodeId);
+                    return fetchServersAndStream(animeEpisodeId, subtype);
                 });
-    }
-
-    // ========================================
-    // Step 0: Build animeEpisodeId = "${slug}?ep=${episodeid}"
-    // Logic 1:1 với Next.js buildZoroAnimeEpisodeId()
-    // ========================================
-    private Mono<String> buildAnimeEpisodeId(String animeId, String episodeid) {
-        // Nếu đã có "?ep=" → đã build rồi, skip
-        if (episodeid.contains("?ep=")) {
-            log.info("✅ Zoro episodeid đã ở dạng đầy đủ: {}", episodeid);
-            return Mono.just(episodeid);
-        }
-
-        log.info("🔨 Zoro building animeEpisodeId từ animeId={}, episodeid={}", animeId, episodeid);
-
-        // Try 1: MalSync(anilistId) -> slug
-        return malSyncClient.getZoroSlug(animeId)
-                .map(map -> (String) map.get("slug"))
-                .flatMap(slug -> {
-                    if (slug != null && !slug.isEmpty()) {
-                        return Mono.just(slug + "?ep=" + episodeid);
-                    }
-
-                    // Try 2: AniZip -> malId -> MalSync(malId) -> slug
-                    return aniZipClient.fetchMalIdFromAnilist(animeId)
-                            .flatMap(malId -> {
-                                if (malId == null || malId.equals(animeId)) {
-                                    log.warn("⚠️ Zoro: No MAL ID fallback for {}", animeId);
-                                    return Mono.just(episodeid); // fallback: dùng episodeid gốc
-                                }
-                                return malSyncClient.getZoroSlug(malId)
-                                        .map(map2 -> {
-                                            String slug2 = (String) map2.get("slug");
-                                            if (slug2 != null && !slug2.isEmpty()) {
-                                                return slug2 + "?ep=" + episodeid;
-                                            }
-                                            return episodeid; // fallback
-                                        });
-                            })
-                            .defaultIfEmpty(episodeid);
-                })
-                .defaultIfEmpty(episodeid);
     }
 
     // ========================================

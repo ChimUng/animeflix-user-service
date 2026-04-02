@@ -1,0 +1,90 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: ai-search-service
+
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/animeflix_ai}
+      auto-index-creation: false   # Tắt vì vector index phải tạo thủ công trên Atlas
+
+    redis:
+      url: ${REDIS_URL:rediss://default:AU3bAAIncDEzODRhYTg2MjIwZTU0NTA1YTYzNzNhYjlmMzFkOTQ0OXAxMTk5MzE@square-sheep-19931.upstash.io:6379}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ai-search-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+# External Services
+services:
+  anime-catalog:
+    url: ${ANIME_CATALOG_URL:http://localhost:8080}
+  user-service:
+    url: ${USER_SERVICE_URL:http://localhost:8081}
+
+# Gemini AI Config
+gemini:
+  api:
+    key: ${GEMINI_API_KEY:your-gemini-api-key}
+    base-url: https://generativelanguage.googleapis.com/v1beta
+    embedding-model: text-embedding-004
+    chat-model: gemini-2.0-flash
+    embedding-dimensions: 768
+
+# AniList API
+anilist:
+  api:
+    url: https://graphql.anilist.co
+
+# Search Config
+search:
+  parser:
+    confidence-threshold: 0.75     # Dưới ngưỡng này → fallback embedding
+  embedding:
+    batch-size: 50                 # Số anime mỗi batch khi embed
+    rate-limit-delay-ms: 200       # Delay giữa các batch (tránh rate limit)
+    vector-index-name: vector_index_description
+    num-candidates: 150            # MongoDB $vectorSearch numCandidates
+    limit: 50                      # Số kết quả từ vector search trước rerank
+  rerank:
+    weights:
+      # Query Parser path
+      structured:
+        popularity: 0.35
+        score: 0.30
+        trending: 0.20
+        personalized: 0.15
+      # Embedding path
+      semantic:
+        cosine-similarity: 0.50
+        popularity: 0.25
+        score: 0.15
+        personalized: 0.10
+
+# Cache TTL (seconds)
+cache:
+  ttl:
+    search-result: 300         # 5 phút
+    user-genre-preference: 3600  # 1 giờ
+
+# Kafka Topics
+kafka:
+  topics:
+    anime-updated: anime.data.updated    # Từ catalog service
+    anime-embedded: anime.embedded       # Publish sau khi embed xong
+
+# Batch Job Config
+batch:
+  embedding:
+    enabled: false   # Chỉ bật thủ công khi cần chạy full batch đầu tiên
+
+logging:
+  level:
+    com.animeflix.aisearchservice: DEBUG
+    org.springframework.data.mongodb: INFO
+    org.springframework.kafka: INFO
